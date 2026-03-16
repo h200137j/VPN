@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1d2e"/>
+      <stop offset="100%" style="stop-color:#0b0d14"/>
+    </linearGradient>
+    <linearGradient id="shield-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5b8dee"/>
+      <stop offset="100%" style="stop-color:#7c6af7"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="128" fill="url(#bg)"/>
+
+  <!-- Outer glow ring -->
+  <circle cx="128" cy="128" r="110" fill="none" stroke="#5b8dee" stroke-width="1.5" opacity="0.3"/>
+
+  <!-- Shield shape -->
+  <path d="M128 44 L60 76 L60 128 C60 168 90 202 128 212 C166 202 196 168 196 128 L196 76 Z"
+        fill="url(#shield-grad)" filter="url(#glow)" opacity="0.95"/>
+
+  <!-- Shield inner highlight -->
+  <path d="M128 58 L72 86 L72 128 C72 162 97 192 128 200 C159 192 184 162 184 128 L184 86 Z"
+        fill="none" stroke="white" stroke-width="1.5" opacity="0.25"/>
+
+  <!-- Lock body -->
+  <rect x="108" y="130" width="40" height="34" rx="6" fill="white" opacity="0.95"/>
+
+  <!-- Lock shackle -->
+  <path d="M114 130 L114 118 C114 108 142 108 142 118 L142 130"
+        fill="none" stroke="white" stroke-width="7" stroke-linecap="round" opacity="0.95"/>
+
+  <!-- Lock keyhole -->
+  <circle cx="128" cy="145" r="5" fill="#5b8dee"/>
+  <rect x="125.5" y="145" width="5" height="9" rx="2" fill="#5b8dee"/>
+</svg>

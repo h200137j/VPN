@@ -15,9 +15,9 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "GoVPN",
-		Width:  480,
-		Height: 680,
+		Title:     "GoVPN",
+		Width:     480,
+		Height:    680,
 		MinWidth:  480,
 		MinHeight: 680,
 		AssetServer: &assetserver.Options{
@@ -25,6 +25,8 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 15, G: 17, B: 23, A: 1},
 		OnStartup:        app.startup,
+		// Hide to tray instead of quitting on window close
+		HideWindowOnClose: true,
 		Bind: []interface{}{
 			app,
 		},

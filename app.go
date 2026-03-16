@@ -20,12 +20,13 @@ import (
 )
 
 type App struct {
-	ctx         context.Context
-	vpnProcess  *exec.Cmd
-	mu          sync.Mutex
-	connected   bool
-	connectedAt time.Time
-	vpnInfo     VPNInfo
+	ctx          context.Context
+	vpnProcess   *exec.Cmd
+	mu           sync.Mutex
+	connected    bool
+	connectedAt  time.Time
+	vpnInfo      VPNInfo
+	trayStatusCh chan string
 }
 
 // Profile represents a saved VPN configuration
@@ -54,9 +55,16 @@ type TrafficStats struct {
 	Uptime  string `json:"uptime"`
 }
 
-func NewApp() *App { return &App{} }
+func NewApp() *App {
+	return &App{
+		trayStatusCh: make(chan string, 4),
+	}
+}
 
-func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+	a.initTray()
+}
 
 // configDir returns ~/.config/govpn
 func configDir() string {
@@ -320,6 +328,7 @@ func (a *App) connect(ovpnPath, username, password string) error {
 	a.connected = true
 	a.vpnInfo = VPNInfo{}
 	runtime.EventsEmit(a.ctx, "vpn:status", "connecting")
+	a.trayStatusCh <- "connecting"
 
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -333,6 +342,7 @@ func (a *App) connect(ovpnPath, username, password string) error {
 		a.vpnProcess = nil
 		a.mu.Unlock()
 		runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
+		a.trayStatusCh <- "disconnected"
 	}()
 
 	return nil
@@ -368,6 +378,7 @@ func (a *App) parseLine(line string) {
 		}()
 		runtime.EventsEmit(a.ctx, "vpn:status", "connected")
 		runtime.EventsEmit(a.ctx, "vpn:info", a.vpnInfo)
+		a.trayStatusCh <- "connected"
 	}
 }
 
@@ -395,6 +406,7 @@ func (a *App) Disconnect() error {
 	a.vpnProcess = nil
 	a.vpnInfo = VPNInfo{}
 	runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
+	a.trayStatusCh <- "disconnected"
 	return nil
 }
 
