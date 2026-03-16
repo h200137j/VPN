@@ -1,0 +1,14 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "govpn",
+  "outputfilename": "vpn",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "calvin",
+    "email": "73125365+h200137j@users.noreply.github.com"
+  },
+  "build:tags": "webkit2_41"
+}
