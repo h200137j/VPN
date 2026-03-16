@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            pkg-config \
+            build-essential \
+            imagemagick \
+            dpkg-dev
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        run: npm install
+        working-directory: frontend
+
+      - name: Build with Wails
+        run: wails build -tags webkit2_41 -ldflags "-X main.version=${{ github.ref_name }}"
+
+      - name: Rename binary
+        run: mv build/bin/vpn build/bin/govpn
+
+      - name: Build .deb package
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION=${VERSION#v}   # strip leading 'v'
+          PKG=govpn_${VERSION}_amd64
+
+          mkdir -p ${PKG}/DEBIAN
+          mkdir -p ${PKG}/usr/bin
+          mkdir -p ${PKG}/usr/share/applications
+          mkdir -p ${PKG}/usr/share/icons/hicolor/256x256/apps
+
+          # Binary
+          cp build/bin/govpn ${PKG}/usr/bin/govpn
+          chmod 755 ${PKG}/usr/bin/govpn
+
+          # App icon
+          convert -background none build/icon.svg -resize 256x256 \
+            ${PKG}/usr/share/icons/hicolor/256x256/apps/govpn.png
+
+          # Desktop entry
+          cat > ${PKG}/usr/share/applications/govpn.desktop << EOF
+          [Desktop Entry]
+          Name=GoVPN
+          Comment=Lightweight OpenVPN client
+          Exec=/usr/bin/govpn
+          Icon=govpn
+          Terminal=false
+          Type=Application
+          Categories=Network;
+          StartupNotify=true
+          EOF
+
+          # Control file
+          cat > ${PKG}/DEBIAN/control << EOF
+          Package: govpn
+          Version: ${VERSION}
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Depends: openvpn, libgtk-3-0, libwebkit2gtk-4.1-0, libayatana-appindicator3-1
+          Maintainer: calvin <your@email.com>
+          Description: Lightweight OpenVPN client for Linux
+           A simple but effective OpenVPN client built with Go and Wails.
+           Supports multiple profiles, saved credentials, live connection
+           stats, system tray, and automatic stale route cleanup.
+          EOF
+
+          dpkg-deb --build --root-owner-group ${PKG}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: GoVPN ${{ github.ref_name }}
+          body: |
+            ## GoVPN ${{ github.ref_name }}
+
+            ### Install via .deb
+            ```bash
+            sudo dpkg -i govpn_*_amd64.deb
+            sudo apt-get install -f   # fix any missing deps
+            ```
+
+            ### Or run the binary directly
+            ```bash
+            chmod +x govpn
+            ./govpn
+            ```
+
+            ### Requirements
+            - OpenVPN installed (`sudo apt install openvpn`)
+            - Passwordless sudo for `openvpn` and `ip` commands recommended
+          files: |
+            build/bin/govpn
+            govpn_*_amd64.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
