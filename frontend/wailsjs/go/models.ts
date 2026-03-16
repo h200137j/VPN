@@ -1,5 +1,49 @@
 export namespace main {
 	
+	export class AuditEntry {
+	    id: string;
+	    profileName: string;
+	    connectedAt: string;
+	    duration: string;
+	    vpnIp: string;
+	    serverIp: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuditEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.profileName = source["profileName"];
+	        this.connectedAt = source["connectedAt"];
+	        this.duration = source["duration"];
+	        this.vpnIp = source["vpnIp"];
+	        this.serverIp = source["serverIp"];
+	    }
+	}
+	export class CertInfo {
+	    subject: string;
+	    issuer: string;
+	    expiresAt: string;
+	    daysLeft: number;
+	    isExpired: boolean;
+	    isWarning: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new CertInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.subject = source["subject"];
+	        this.issuer = source["issuer"];
+	        this.expiresAt = source["expiresAt"];
+	        this.daysLeft = source["daysLeft"];
+	        this.isExpired = source["isExpired"];
+	        this.isWarning = source["isWarning"];
+	    }
+	}
 	export class Profile {
 	    id: string;
 	    name: string;

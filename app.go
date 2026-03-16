@@ -20,13 +20,14 @@ import (
 )
 
 type App struct {
-	ctx          context.Context
-	vpnProcess   *exec.Cmd
-	mu           sync.Mutex
-	connected    bool
-	connectedAt  time.Time
-	vpnInfo      VPNInfo
-	trayStatusCh chan string
+	ctx               context.Context
+	vpnProcess        *exec.Cmd
+	mu                sync.Mutex
+	connected         bool
+	connectedAt       time.Time
+	vpnInfo           VPNInfo
+	trayStatusCh      chan string
+	activeProfileName string
 }
 
 // Profile represents a saved VPN configuration
@@ -285,6 +286,9 @@ func (a *App) ConnectProfile(profileID string) error {
 	}
 	for _, p := range profiles {
 		if p.ID == profileID {
+			a.mu.Lock()
+			a.activeProfileName = p.Name
+			a.mu.Unlock()
 			return a.connect(p.OvpnPath, p.Username, p.Password)
 		}
 	}
@@ -338,9 +342,27 @@ func (a *App) connect(ovpnPath, username, password string) error {
 			a.parseLine(line)
 		}
 		a.mu.Lock()
+		connectedAt := a.connectedAt
+		profileName := a.activeProfileName
+		vpnIP := a.vpnInfo.VpnIP
+		serverIP := a.vpnInfo.ServerIP
 		a.connected = false
 		a.vpnProcess = nil
 		a.mu.Unlock()
+
+		// Write audit entry
+		if !connectedAt.IsZero() {
+			duration := time.Since(connectedAt)
+			a.appendAuditEntry(AuditEntry{
+				ID:          fmt.Sprintf("%d", connectedAt.UnixMilli()),
+				ProfileName: profileName,
+				ConnectedAt: connectedAt.Format("2 Jan 2006 15:04:05"),
+				Duration:    formatDuration(duration),
+				VpnIP:       vpnIP,
+				ServerIP:    serverIP,
+			})
+		}
+
 		runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
 		a.trayStatusCh <- "disconnected"
 	}()

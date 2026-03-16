@@ -51,6 +51,12 @@ body {
   gap: 12px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .shield {
   width: 40px;
   height: 40px;
@@ -598,6 +604,7 @@ button {
   gap: 4px;
   opacity: 0;
   transition: opacity 0.2s;
+  margin-left: 8px;
 }
 
 .profile-item:hover .profile-actions { opacity: 1; }
@@ -638,3 +645,207 @@ button {
   box-shadow: 0 2px 12px rgba(91,141,238,0.3);
 }
 .btn-save-profile:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(91,141,238,0.45); }
+
+/* ── VAULT SCREEN ── */
+.vault-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 32px 28px;
+  gap: 12px;
+  text-align: center;
+}
+
+.vault-shield {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(91,141,238,0.15), rgba(124,106,247,0.15));
+  border: 1px solid rgba(91,141,238,0.3);
+  color: var(--accent);
+  box-shadow: 0 0 32px rgba(91,141,238,0.2);
+  margin-bottom: 4px;
+}
+
+.vault-shield svg { width: 34px; height: 34px; }
+
+.vault-screen h1 {
+  font-size: 26px;
+}
+
+.vault-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.vault-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.vault-error {
+  font-size: 12px;
+  color: var(--danger);
+  min-height: 16px;
+  text-align: left;
+}
+
+.vault-btn {
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* ── LOCK BUTTON in header ── */
+.btn-lock {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.btn-lock:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ── TABS ── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+
+.tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.tab.active {
+  background: var(--surface2);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.tab:hover:not(.active) { color: var(--text); }
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── AUDIT LOG ── */
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.audit-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.audit-icon {
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.audit-profile {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.audit-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.audit-ips {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-clear-audit {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 10px;
+}
+.btn-clear-audit:hover { color: var(--danger); border-color: var(--danger); }
+
+/* ── CERT BADGES ── */
+.profile-cert {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cert-expiry {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.cert-expiry.ok {
+  background: rgba(62,207,142,0.1);
+  border: 1px solid rgba(62,207,142,0.3);
+  color: var(--success);
+}
+
+.cert-expiry.warning {
+  background: rgba(240,165,0,0.12);
+  border: 1px solid rgba(240,165,0,0.4);
+  color: var(--warning);
+}
+
+.cert-expiry.expired {
+  background: rgba(224,92,92,0.12);
+  border: 1px solid rgba(224,92,92,0.4);
+  color: var(--danger);
+}
+
+.cert-expiry.none {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
