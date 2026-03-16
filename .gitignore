@@ -1,3 +1,7 @@
 build/bin
 node_modules
 frontend/dist
+
+# deb packaging
+govpn_*/
+*.deb
