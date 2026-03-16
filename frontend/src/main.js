@@ -2,9 +2,10 @@ import './style.css';
 import {
   ImportProfile, LoadProfiles, UpdateProfile, DeleteProfile,
   ConnectProfile, Disconnect, PickOvpnFile, GetTrafficStats,
-  LoadAuditLog, ClearAuditLog, CheckProfileCerts
+  LoadAuditLog, ClearAuditLog, CheckProfileCerts,
+  CheckForUpdate, CheckChangelog
 } from '../wailsjs/go/main/App';
-import { EventsOn, WindowSetSize } from '../wailsjs/runtime/runtime';
+import { EventsOn, WindowSetSize, BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
 let profiles = [];
 let activeProfileId = null;
@@ -109,6 +110,29 @@ document.querySelector('#app').innerHTML = `
       <button class="btn-clear" id="btn-clear">Clear</button>
     </div>
     <div class="log-box" id="log"></div>
+  </div>
+
+  <div class="footer">made with ❤️ by uriel</div>
+
+  <!-- Update banner (hidden by default) -->
+  <div class="update-banner" id="update-banner" style="display:none">
+    <span class="update-banner-text">
+      🚀 <strong id="update-version"></strong> is available
+    </span>
+    <a class="update-banner-link" id="update-link" href="#">Download</a>
+    <button class="update-banner-dismiss" id="update-dismiss">✕</button>
+  </div>
+
+  <!-- Changelog modal (hidden by default) -->
+  <div class="modal-overlay" id="changelog-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">✨ What's new</span>
+        <span class="modal-version" id="changelog-version"></span>
+      </div>
+      <div class="modal-body" id="changelog-body"></div>
+      <button class="btn-connect modal-close" id="changelog-close">Got it</button>
+    </div>
   </div>
 `;
 
@@ -343,10 +367,11 @@ function stopTimers() {
 // ── Status ──
 function setStatus(state) {
   dot.className = `dot ${state}`;
-  statusPill.className = `status-pill ${state}`;
-  shield.className = `shield ${state}`;
-  statusText.textContent = { connecting: 'Connecting...', connected: 'Connected', disconnected: 'Disconnected' }[state] || state;
-  const isActive = state === 'connected' || state === 'connecting';
+  statusPill.className = `status-pill ${state === 'reconnecting' ? 'connecting' : state}`;
+  shield.className = `shield ${state === 'reconnecting' ? 'connecting' : state}`;
+  const labels = { connecting: 'Connecting...', connected: 'Connected', disconnected: 'Disconnected', reconnecting: 'Reconnecting...' };
+  statusText.textContent = labels[state] || state;
+  const isActive = state === 'connected' || state === 'connecting' || state === 'reconnecting';
   btnConnect.style.display    = isActive ? 'none' : 'block';
   btnDisconnect.style.display = isActive ? 'block' : 'none';
   btnConnect.disabled = false;
@@ -377,6 +402,10 @@ btnDisconnect.addEventListener('click', async () => {
 
 // ── VPN events ──
 EventsOn('vpn:status', setStatus);
+EventsOn('vpn:reconnect', (data) => {
+  statusText.textContent = `Reconnecting... (${data.attempt}/${data.total})`;
+  appendLog(`Waiting ${data.delay}s before attempt ${data.attempt}/${data.total}...`, 'warn');
+});
 EventsOn('vpn:info', (info) => {
   if (info.vpnIp)     heroIp.textContent = info.vpnIp;
   if (info.publicIp)  document.getElementById('info-public-ip').textContent = info.publicIp;
@@ -394,3 +423,52 @@ EventsOn('vpn:log', (line) => {
 
 // ── Init ──
 refreshProfiles();
+
+// ── Update check ──
+async function runUpdateCheck() {
+  try {
+    const info = await CheckForUpdate();
+    if (info.hasUpdate) {
+      document.getElementById('update-version').textContent = info.latestTag;
+      const banner = document.getElementById('update-banner');
+      const link   = document.getElementById('update-link');
+      banner.style.display = 'flex';
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        BrowserOpenURL(info.releaseUrl);
+      });
+      document.getElementById('update-dismiss').addEventListener('click', () => {
+        banner.style.display = 'none';
+      });
+    }
+  } catch(_) {}
+}
+
+// ── Changelog on first boot of new version ──
+async function runChangelogCheck() {
+  try {
+    const notes = await CheckChangelog();
+    if (!notes) return;
+    // Grab version from update info (or fall back to banner text)
+    const overlay = document.getElementById('changelog-overlay');
+    const body    = document.getElementById('changelog-body');
+    // Render markdown-ish: convert lines starting with - or * to bullets
+    body.innerHTML = notes
+      .split('\n')
+      .map(l => {
+        l = l.trim();
+        if (!l) return '';
+        if (l.startsWith('## ')) return `<div class="cl-heading">${l.slice(3)}</div>`;
+        if (l.startsWith('- ') || l.startsWith('* ')) return `<div class="cl-item">• ${l.slice(2)}</div>`;
+        return `<div class="cl-text">${l}</div>`;
+      })
+      .join('');
+    overlay.style.display = 'flex';
+    document.getElementById('changelog-close').addEventListener('click', () => {
+      overlay.style.display = 'none';
+    });
+  } catch(_) {}
+}
+
+runChangelogCheck();
+runUpdateCheck();

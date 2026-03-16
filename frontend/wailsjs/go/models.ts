@@ -84,6 +84,26 @@ export namespace main {
 	        this.uptime = source["uptime"];
 	    }
 	}
+	export class UpdateInfo {
+	    hasUpdate: boolean;
+	    latestTag: string;
+	    currentTag: string;
+	    releaseUrl: string;
+	    releaseBody: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasUpdate = source["hasUpdate"];
+	        this.latestTag = source["latestTag"];
+	        this.currentTag = source["currentTag"];
+	        this.releaseUrl = source["releaseUrl"];
+	        this.releaseBody = source["releaseBody"];
+	    }
+	}
 	export class VPNInfo {
 	    vpnIp: string;
 	    publicIp: string;

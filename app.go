@@ -28,6 +28,9 @@ type App struct {
 	vpnInfo           VPNInfo
 	trayStatusCh      chan string
 	activeProfileName string
+	activeProfileID   string   // for auto-reconnect
+	manualDisconnect  bool     // true = user clicked disconnect, don't retry
+	reconnectCancel   chan struct{} // close to cancel a pending reconnect
 }
 
 // Profile represents a saved VPN configuration
@@ -288,6 +291,8 @@ func (a *App) ConnectProfile(profileID string) error {
 		if p.ID == profileID {
 			a.mu.Lock()
 			a.activeProfileName = p.Name
+			a.activeProfileID   = p.ID
+			a.manualDisconnect  = false
 			a.mu.Unlock()
 			return a.connect(p.OvpnPath, p.Username, p.Password)
 		}
@@ -342,12 +347,14 @@ func (a *App) connect(ovpnPath, username, password string) error {
 			a.parseLine(line)
 		}
 		a.mu.Lock()
-		connectedAt := a.connectedAt
-		profileName := a.activeProfileName
-		vpnIP := a.vpnInfo.VpnIP
-		serverIP := a.vpnInfo.ServerIP
-		a.connected = false
-		a.vpnProcess = nil
+		connectedAt    := a.connectedAt
+		profileName    := a.activeProfileName
+		profileID      := a.activeProfileID
+		vpnIP          := a.vpnInfo.VpnIP
+		serverIP       := a.vpnInfo.ServerIP
+		wasManual      := a.manualDisconnect
+		a.connected    = false
+		a.vpnProcess   = nil
 		a.mu.Unlock()
 
 		// Write audit entry
@@ -365,6 +372,11 @@ func (a *App) connect(ovpnPath, username, password string) error {
 
 		runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
 		a.trayStatusCh <- "disconnected"
+
+		// Auto-reconnect only on unexpected drops
+		if !wasManual && profileID != "" {
+			a.startReconnectLoop(profileID)
+		}
 	}()
 
 	return nil
@@ -406,27 +418,45 @@ func (a *App) parseLine(line string) {
 
 func (a *App) Disconnect() error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	if a.vpnProcess == nil {
+		// Cancel any pending reconnect even if not currently connected
+		if a.reconnectCancel != nil {
+			close(a.reconnectCancel)
+			a.reconnectCancel = nil
+		}
+		a.mu.Unlock()
 		return fmt.Errorf("not connected")
 	}
 
-	a.vpnProcess.Process.Signal(os.Interrupt)
+	a.manualDisconnect = true
+	if a.reconnectCancel != nil {
+		close(a.reconnectCancel)
+		a.reconnectCancel = nil
+	}
+	a.mu.Unlock()
+
+	a.mu.Lock()
+	proc := a.vpnProcess
+	a.mu.Unlock()
+
+	proc.Process.Signal(os.Interrupt)
 	done := make(chan struct{})
 	go func() {
-		a.vpnProcess.Wait()
+		proc.Wait()
 		close(done)
 	}()
 	select {
 	case <-done:
 	case <-time.After(3 * time.Second):
-		a.vpnProcess.Process.Kill()
+		proc.Process.Kill()
 	}
 
+	a.mu.Lock()
 	a.connected = false
 	a.vpnProcess = nil
 	a.vpnInfo = VPNInfo{}
+	a.mu.Unlock()
 	runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
 	a.trayStatusCh <- "disconnected"
 	return nil
@@ -436,6 +466,57 @@ func (a *App) IsConnected() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.connected
+}
+
+// startReconnectLoop retries connecting with exponential backoff (5 attempts max)
+func (a *App) startReconnectLoop(profileID string) {
+	cancel := make(chan struct{})
+	a.mu.Lock()
+	a.reconnectCancel = cancel
+	a.mu.Unlock()
+
+	go func() {
+		delays := []time.Duration{5, 10, 20, 40, 60}
+		for attempt, delay := range delays {
+			// Emit reconnecting status with countdown
+			msg := fmt.Sprintf("Reconnecting in %ds (attempt %d/%d)...", int(delay.Seconds()), attempt+1, len(delays))
+			runtime.EventsEmit(a.ctx, "vpn:log", msg)
+			runtime.EventsEmit(a.ctx, "vpn:status", "reconnecting")
+			runtime.EventsEmit(a.ctx, "vpn:reconnect", map[string]interface{}{
+				"attempt": attempt + 1,
+				"total":   len(delays),
+				"delay":   int(delay.Seconds()),
+			})
+
+			// Wait with cancellation support
+			select {
+			case <-cancel:
+				runtime.EventsEmit(a.ctx, "vpn:log", "Reconnect cancelled.")
+				return
+			case <-time.After(delay * time.Second):
+			}
+
+			// Check if manually cancelled during wait
+			a.mu.Lock()
+			isManual := a.manualDisconnect
+			a.mu.Unlock()
+			if isManual {
+				return
+			}
+
+			runtime.EventsEmit(a.ctx, "vpn:log", fmt.Sprintf("Reconnect attempt %d/%d...", attempt+1, len(delays)))
+			if err := a.ConnectProfile(profileID); err == nil {
+				// Success — loop will exit naturally when connected
+				a.mu.Lock()
+				a.reconnectCancel = nil
+				a.mu.Unlock()
+				return
+			}
+		}
+		runtime.EventsEmit(a.ctx, "vpn:log", "Auto-reconnect failed after 5 attempts.")
+		runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
+		a.trayStatusCh <- "disconnected"
+	}()
 }
 
 func copyFile(src, dst string) error {
@@ -475,4 +556,103 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%02d:%02d:%02d", h, m, s)
 	}
 	return fmt.Sprintf("%02d:%02d", m, s)
+}
+
+// ── Update / Changelog ──────────────────────────────────────────────────────
+
+// UpdateInfo holds the result of a GitHub update check
+type UpdateInfo struct {
+	HasUpdate   bool   `json:"hasUpdate"`
+	LatestTag   string `json:"latestTag"`
+	CurrentTag  string `json:"currentTag"`
+	ReleaseURL  string `json:"releaseUrl"`
+	ReleaseBody string `json:"releaseBody"`
+}
+
+// AppConfig persists lightweight app state between launches
+type AppConfig struct {
+	LastSeenVersion string `json:"lastSeenVersion"`
+}
+
+func appConfigPath() string {
+	return filepath.Join(configDir(), "config.json")
+}
+
+func loadAppConfig() AppConfig {
+	data, err := os.ReadFile(appConfigPath())
+	if err != nil {
+		return AppConfig{}
+	}
+	var cfg AppConfig
+	json.Unmarshal(data, &cfg)
+	return cfg
+}
+
+func saveAppConfig(cfg AppConfig) {
+	os.MkdirAll(configDir(), 0700)
+	data, _ := json.MarshalIndent(cfg, "", "  ")
+	os.WriteFile(appConfigPath(), data, 0600)
+}
+
+// GetCurrentVersion returns the build-time version string
+func (a *App) GetCurrentVersion() string {
+	return version
+}
+
+// CheckForUpdate hits the GitHub releases API and returns update info
+func (a *App) CheckForUpdate() UpdateInfo {
+	client := &http.Client{Timeout: 8 * time.Second}
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/h200137j/VPN/releases/latest", nil)
+	if err != nil {
+		return UpdateInfo{CurrentTag: version}
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		return UpdateInfo{CurrentTag: version}
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		TagName string `json:"tag_name"`
+		HTMLURL string `json:"html_url"`
+		Body    string `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return UpdateInfo{CurrentTag: version}
+	}
+
+	return UpdateInfo{
+		HasUpdate:   release.TagName != version && version != "dev",
+		LatestTag:   release.TagName,
+		CurrentTag:  version,
+		ReleaseURL:  release.HTMLURL,
+		ReleaseBody: release.Body,
+	}
+}
+
+// CheckChangelog returns release notes if this is the first boot on a new version
+func (a *App) CheckChangelog() string {
+	if version == "dev" {
+		return ""
+	}
+	cfg := loadAppConfig()
+	if cfg.LastSeenVersion == version {
+		return ""
+	}
+	client := &http.Client{Timeout: 8 * time.Second}
+	resp, err := client.Get("https://api.github.com/repos/h200137j/VPN/releases/tags/" + version)
+	if err != nil || resp.StatusCode != 200 {
+		cfg.LastSeenVersion = version
+		saveAppConfig(cfg)
+		return ""
+	}
+	defer resp.Body.Close()
+	var release struct {
+		Body string `json:"body"`
+	}
+	json.NewDecoder(resp.Body).Decode(&release)
+	cfg.LastSeenVersion = version
+	saveAppConfig(cfg)
+	return release.Body
 }
