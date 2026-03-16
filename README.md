@@ -4,12 +4,35 @@
 
 ### A lightweight OpenVPN client for Linux — built with Go & Wails
 
-![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat-square&logo=go&logoColor=white)
-![Wails](https://img.shields.io/badge/Wails-v2-red?style=flat-square&logo=wails&logoColor=white)
+[![Latest Release](https://img.shields.io/github/v/release/h200137j/VPN?style=flat-square&color=5b8dee&label=latest)](https://github.com/h200137j/VPN/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/h200137j/VPN/total?style=flat-square&color=3ecf8e)](https://github.com/h200137j/VPN/releases)
+![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go&logoColor=white)
+![Wails](https://img.shields.io/badge/Wails-v2-red?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Linux-FCC624?style=flat-square&logo=linux&logoColor=black)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 </div>
+
+---
+
+## 📦 Install
+
+### Option 1 — .deb package (recommended)
+
+Download the latest `.deb` from the [Releases page](https://github.com/h200137j/VPN/releases/latest) and install:
+
+```bash
+sudo dpkg -i govpn_*_amd64.deb
+sudo apt-get install -f
+```
+
+### Option 2 — Raw binary
+
+```bash
+# Download and make executable
+chmod +x govpn
+./govpn
+```
 
 ---
 
@@ -19,37 +42,30 @@
 - **Import & forget** — the app copies your `.ovpn` file into internal storage, so you can delete the original
 - **Live connection stats** — VPN IP, public IP, server, cipher, interface, bytes sent/received
 - **Connection timer** — see exactly how long you've been connected
+- **System tray** — minimize to tray and keep the VPN running in the background
 - **Stale route cleanup** — automatically flushes leftover `tun` interfaces on reconnect, fixing the classic "connected but no traffic" Linux bug
 - **Graceful disconnect** — sends `SIGTERM` so OpenVPN cleans up its own routes properly
 - **Beautiful dark UI** — animated shield, gradient buttons, smooth panel transitions
-- **Password visibility toggle** — show/hide your VPN password
 - **Live log stream** — color-coded OpenVPN output in real time
 
 ---
 
-## 📸 Screenshots
-
-> _Coming soon_
-
----
-
-## 🚀 Getting Started
+## 🚀 Build from Source
 
 ### Prerequisites
 
 | Dependency | Install |
 |---|---|
-| Go 1.21+ | [go.dev](https://go.dev/dl/) |
+| Go 1.23+ | [go.dev](https://go.dev/dl/) |
 | Wails v2 | `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
 | OpenVPN | `sudo apt install openvpn` |
 | WebKit2GTK | `sudo apt install libwebkit2gtk-4.1-dev` |
+| AppIndicator | `sudo apt install libayatana-appindicator3-dev` |
 | Node.js + npm | [nodejs.org](https://nodejs.org) |
 
-### Build
-
 ```bash
-git clone https://github.com/youruser/govpn.git
-cd govpn
+git clone https://github.com/h200137j/VPN.git
+cd VPN
 wails build -tags webkit2_41
 ./build/bin/vpn
 ```
@@ -91,14 +107,12 @@ When you import a profile, the `.ovpn` file is copied to:
 
 ```
 ~/.config/govpn/
-├── profiles.json          # profile index
+├── profiles.json
 └── profiles/
     └── <id>/
-        ├── config.ovpn    # your imported config
+        ├── config.ovpn    # your imported config (original can be deleted)
         └── auth.txt       # credentials (mode 0600)
 ```
-
-Once imported, the original `.ovpn` file is no longer needed and can be safely deleted.
 
 ---
 
@@ -117,8 +131,9 @@ youruser ALL=(ALL) NOPASSWD: /usr/sbin/openvpn, /usr/sbin/ip, /bin/bash
 - **[Go](https://go.dev)** — backend, process management, file I/O
 - **[Wails v2](https://wails.io)** — bridges Go and the web frontend
 - **[Vite](https://vitejs.dev)** — frontend build tool
-- **Vanilla JS + CSS** — no framework, just clean modern CSS with animations
+- **Vanilla JS + CSS** — no framework, clean modern CSS with animations
 - **[OpenVPN](https://openvpn.net)** — the underlying VPN engine
+- **[fyne.io/systray](https://github.com/fyne-io/systray)** — system tray support
 
 ---
 

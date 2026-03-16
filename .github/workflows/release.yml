@@ -83,7 +83,7 @@ jobs:
           Priority: optional
           Architecture: amd64
           Depends: openvpn, libgtk-3-0, libwebkit2gtk-4.1-0, libayatana-appindicator3-1
-          Maintainer: calvin <your@email.com>
+          Maintainer: calvin <73125365+h200137j@users.noreply.github.com>
           Description: Lightweight OpenVPN client for Linux
            A simple but effective OpenVPN client built with Go and Wails.
            Supports multiple profiles, saved credentials, live connection
