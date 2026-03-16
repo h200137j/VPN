@@ -98,28 +98,24 @@ jobs:
 
           dpkg-deb --build --root-owner-group ${PKG}
 
+      - name: Get tag message
+        id: tag_msg
+        run: |
+          MSG=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
+          # Escape for multiline GitHub output
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: GoVPN ${{ github.ref_name }}
           body: |
-            ## GoVPN ${{ github.ref_name }}
+            ${{ steps.tag_msg.outputs.body }}
 
-            ### Install via .deb
-            ```bash
-            sudo dpkg -i govpn_*_amd64.deb
-            sudo apt-get install -f   # fix any missing deps
-            ```
-
-            ### Or run the binary directly
-            ```bash
-            chmod +x govpn
-            ./govpn
-            ```
-
-            ### Requirements
-            - OpenVPN installed (`sudo apt install openvpn`)
-            - Passwordless sudo for `openvpn` and `ip` commands recommended
+            ---
+            **Install:** `sudo dpkg -i govpn_*_amd64.deb`
           files: |
             build/bin/govpn
             govpn_*_amd64.deb
