@@ -1009,17 +1009,71 @@ button {
 .ping-badge.poor    { color: var(--danger); }
 .ping-badge.unreachable { color: var(--danger); }
 
-/* ── SPEED TEST BUTTON ── */
+/* ── SPEED TEST ── */
+.speed-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.speed-results {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.speed-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.speed-tile-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+
+.speed-tile-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-tile-compare {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-tile-compare.cmp-up   { color: var(--success); }
+.speed-tile-compare.cmp-down { color: var(--danger); }
+
+.speed-context {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  display: none;
+}
+
 .btn-speedtest {
-  width: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 10px;
-  border-radius: var(--radius-sm);
+  padding: 5px 14px;
+  border-radius: 999px;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 .btn-speedtest:hover:not(:disabled) {
   border-color: var(--accent);
@@ -1027,3 +1081,172 @@ button {
   background: rgba(91,141,238,0.08);
 }
 .btn-speedtest:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── SETTINGS ── */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-row:last-child { border-bottom: none; }
+
+.setting-info { flex: 1; }
+
+.setting-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.setting-desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.setting-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px 10px;
+  outline: none;
+  cursor: pointer;
+  max-width: 160px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235c6080'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.setting-select:focus { border-color: var(--accent); }
+
+.setting-select option {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* Toggle switch */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle input { opacity: 0; width: 0; height: 0; }
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--muted);
+  border-radius: 50%;
+  transition: all 0.25s ease;
+}
+
+.toggle input:checked + .toggle-slider {
+  background: rgba(91,141,238,0.2);
+  border-color: var(--accent);
+}
+
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(18px) translateY(-50%);
+  background: var(--accent);
+}
+
+/* ── DISCONNECTED HINT ── */
+.disconnected-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.hint-icon { font-size: 32px; opacity: 0.4; }
+.hint-text { font-size: 14px; font-weight: 600; }
+.hint-sub  { font-size: 12px; opacity: 0.7; }
+
+/* info-panel inside tab — no animation needed, always visible when tab shown */
+#tab-connection .info-panel {
+  max-height: none;
+  opacity: 1;
+  overflow: visible;
+}
+
+/* ── IP BANNER ── */
+.ip-banner {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  gap: 12px;
+}
+
+.ip-banner-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.ip-banner-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.ip-banner-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.ip-banner-value {
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}

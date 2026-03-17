@@ -1,5 +1,21 @@
 export namespace main {
 	
+	export class AppConfig {
+	    lastSeenVersion: string;
+	    autoConnect: boolean;
+	    autoConnectProfileId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.lastSeenVersion = source["lastSeenVersion"];
+	        this.autoConnect = source["autoConnect"];
+	        this.autoConnectProfileId = source["autoConnectProfileId"];
+	    }
+	}
 	export class AuditEntry {
 	    id: string;
 	    profileName: string;

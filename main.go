@@ -19,10 +19,10 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:     "GoVPN",
-		Width:     480,
-		Height:    680,
-		MinWidth:  480,
-		MinHeight: 680,
+		Width:     600,
+		Height:    720,
+		MinWidth:  600,
+		MinHeight: 720,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

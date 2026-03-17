@@ -4,7 +4,7 @@ import {
   ConnectProfile, Disconnect, PickOvpnFile, GetTrafficStats,
   LoadAuditLog, ClearAuditLog, CheckProfileCerts,
   CheckForUpdate, CheckChangelog, GetCurrentVersion, PingServer,
-  RunSpeedTest
+  RunSpeedTest, GetSettings, SaveSettings, GetLocalIP
 } from '../wailsjs/go/main/App';
 import { EventsOn, WindowSetSize, BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
@@ -34,10 +34,26 @@ document.querySelector('#app').innerHTML = `
 
   <div class="tabs">
     <button class="tab active" data-tab="profiles">Profiles</button>
-    <button class="tab" data-tab="audit">Audit Log</button>
+    <button class="tab" data-tab="connection">Connection</button>
+    <button class="tab" data-tab="audit">Audit</button>
+    <button class="tab" data-tab="settings">Settings</button>
   </div>
 
   <div class="tab-content" id="tab-profiles">
+    <div class="ip-banner" id="ip-banner">
+      <!--
+      <div class="ip-banner-item">
+        <span class="ip-banner-label">Public IP</span>
+        <span class="ip-banner-value" id="current-ip">fetching...</span>
+      </div>
+      <div class="ip-banner-divider"></div>
+      -->
+      <span id="current-ip" style="display:none"></span>
+      <div class="ip-banner-item">
+        <span class="ip-banner-label">Local IP</span>
+        <span class="ip-banner-value" id="local-ip">fetching...</span>
+      </div>
+    </div>
     <div class="section-header">
       <span class="section-label">Profiles</span>
       <button class="btn-add" id="btn-add-profile">+ Add Profile</button>
@@ -74,6 +90,56 @@ document.querySelector('#app').innerHTML = `
         <button class="btn-save-profile" id="btn-save-profile">Save Profile</button>
       </div>
     </div>
+
+    <div class="speed-section">
+      <div class="section-header">
+        <span class="section-label">Speed Test</span>
+        <button class="btn-speedtest" id="btn-speedtest">▶ Run</button>
+      </div>
+      <div class="speed-results" id="speed-results">
+        <div class="speed-tile">
+          <div class="speed-tile-label">⬇ Download</div>
+          <div class="speed-tile-value" id="info-dl">—</div>
+          <div class="speed-tile-compare" id="cmp-dl"></div>
+        </div>
+        <div class="speed-tile">
+          <div class="speed-tile-label">⬆ Upload</div>
+          <div class="speed-tile-value" id="info-ul">—</div>
+          <div class="speed-tile-compare" id="cmp-ul"></div>
+        </div>
+      </div>
+      <div class="speed-context" id="speed-context"></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-connection" style="display:none">
+    <div class="info-panel" id="info-panel">
+      <div class="info-hero">
+        <div class="info-hero-ip" id="hero-ip">—</div>
+        <div class="info-hero-label">VPN IP Address</div>
+        <div class="uptime-badge" id="uptime">00:00</div>
+      </div>
+      <div class="info-grid">
+        <div class="info-tile"><div class="info-tile-icon">🌐</div><div class="info-tile-body"><div class="info-tile-label">Public IP</div><div class="info-tile-value" id="info-public-ip">—</div></div></div>
+        <div class="info-tile"><div class="info-tile-icon">🖥</div><div class="info-tile-body"><div class="info-tile-label">VPN Server</div><div class="info-tile-value" id="info-server">—</div></div></div>
+        <div class="info-tile"><div class="info-tile-icon">🔌</div><div class="info-tile-body"><div class="info-tile-label">Interface</div><div class="info-tile-value" id="info-iface">—</div></div></div>
+        <div class="info-tile"><div class="info-tile-icon">🔒</div><div class="info-tile-body"><div class="info-tile-label">Cipher</div><div class="info-tile-value" id="info-cipher">—</div></div></div>
+        <div class="info-tile"><div class="info-tile-icon">⬇</div><div class="info-tile-body"><div class="info-tile-label">Downloaded</div><div class="info-tile-value" id="info-rx">—</div></div></div>
+        <div class="info-tile"><div class="info-tile-icon">⬆</div><div class="info-tile-body"><div class="info-tile-label">Uploaded</div><div class="info-tile-value" id="info-tx">—</div></div></div>
+      </div>
+    </div>
+    <div class="disconnected-hint" id="disconnected-hint">
+      <div class="hint-icon">🔌</div>
+      <div class="hint-text">Not connected</div>
+      <div class="hint-sub">Connect from the Profiles tab to see live details here</div>
+    </div>
+    <div class="log-wrap">
+      <div class="log-header">
+        <span>Connection Log</span>
+        <button class="btn-clear" id="btn-clear">Clear</button>
+      </div>
+      <div class="log-box" id="log"></div>
+    </div>
   </div>
 
   <div class="tab-content" id="tab-audit" style="display:none">
@@ -82,6 +148,28 @@ document.querySelector('#app').innerHTML = `
       <button class="btn-clear-audit" id="btn-clear-audit">Clear</button>
     </div>
     <div class="audit-list" id="audit-list"></div>
+  </div>
+
+  <div class="tab-content" id="tab-settings" style="display:none">
+    <div class="settings-group">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Auto-connect on launch</div>
+          <div class="setting-desc">Automatically connect when the app opens</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="setting-autoconnect"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row" id="autoconnect-profile-row" style="display:none">
+        <div class="setting-info">
+          <div class="setting-label">Profile to connect</div>
+          <div class="setting-desc">Which profile to use on auto-connect</div>
+        </div>
+        <select class="setting-select" id="setting-profile-select"></select>
+      </div>
+    </div>
   </div>
 
   <div class="info-panel" id="info-panel">
@@ -97,23 +185,12 @@ document.querySelector('#app').innerHTML = `
       <div class="info-tile"><div class="info-tile-icon">🔒</div><div class="info-tile-body"><div class="info-tile-label">Cipher</div><div class="info-tile-value" id="info-cipher">—</div></div></div>
       <div class="info-tile"><div class="info-tile-icon">⬇</div><div class="info-tile-body"><div class="info-tile-label">Downloaded</div><div class="info-tile-value" id="info-rx">—</div></div></div>
       <div class="info-tile"><div class="info-tile-icon">⬆</div><div class="info-tile-body"><div class="info-tile-label">Uploaded</div><div class="info-tile-value" id="info-tx">—</div></div></div>
-      <div class="info-tile"><div class="info-tile-icon">⬇️</div><div class="info-tile-body"><div class="info-tile-label">Download Speed</div><div class="info-tile-value" id="info-dl">—</div></div></div>
-      <div class="info-tile"><div class="info-tile-icon">⬆️</div><div class="info-tile-body"><div class="info-tile-label">Upload Speed</div><div class="info-tile-value" id="info-ul">—</div></div></div>
     </div>
-    <button class="btn-speedtest" id="btn-speedtest">Run Speed Test</button>
   </div>
 
   <div class="action-row">
     <button class="btn-connect" id="btn-connect">Connect</button>
     <button class="btn-disconnect" id="btn-disconnect" style="display:none">Disconnect</button>
-  </div>
-
-  <div class="log-wrap">
-    <div class="log-header">
-      <span>Connection Log</span>
-      <button class="btn-clear" id="btn-clear">Clear</button>
-    </div>
-    <div class="log-box" id="log"></div>
   </div>
 
   <div class="footer">made with ❤️ by uriel &nbsp;·&nbsp; <span id="app-version">dev</span></div>
@@ -166,14 +243,19 @@ const log           = document.getElementById('log');
 const auditList     = document.getElementById('audit-list');
 
 // ── Tabs ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+  document.getElementById('tab-' + name).style.display = 'flex';
+  // Hide connect button on audit/settings tabs
+  const hideActions = name === 'audit' || name === 'settings';
+  document.querySelector('.action-row').style.display = hideActions ? 'none' : 'flex';
+  if (name === 'audit') renderAuditLog();
+  if (name === 'settings') renderSettings();
+}
+
 document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-    tab.classList.add('active');
-    document.getElementById('tab-' + tab.dataset.tab).style.display = 'flex';
-    if (tab.dataset.tab === 'audit') renderAuditLog();
-  });
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
 });
 
 // ── Logging ──
@@ -406,26 +488,57 @@ function setStatus(state) {
   const isActive = state === 'connected' || state === 'connecting' || state === 'reconnecting';
   btnConnect.style.display    = isActive ? 'none' : 'block';
   btnDisconnect.style.display = isActive ? 'block' : 'none';
-  btnConnect.disabled = false;
+  if (state === 'disconnected') btnConnect.disabled = false;
+
+  const hint = document.getElementById('disconnected-hint');
   if (state === 'connected') {
-    infoPanel.classList.add('visible'); WindowSetSize(520, 960); startTimers();
+    infoPanel.classList.add('visible');
+    if (hint) hint.style.display = 'none';
+    WindowSetSize(600, 1020);
+    startTimers();
+    switchTab('connection');
+  } else if (state === 'connecting' || state === 'reconnecting') {
+    switchTab('connection');
   } else if (state === 'disconnected') {
-    infoPanel.classList.remove('visible'); WindowSetSize(480, 700); stopTimers();
+    infoPanel.classList.remove('visible');
+    if (hint) hint.style.display = 'flex';
+    WindowSetSize(600, 720);
+    stopTimers();
     uptime.textContent = '00:00'; heroIp.textContent = '—';
     ['info-public-ip','info-server','info-iface','info-cipher','info-rx','info-tx']
       .forEach(id => { document.getElementById(id).textContent = '—'; });
-    refreshProfiles(); // refresh to update audit log badge
+    refreshProfiles();
+    refreshPublicIP();
+    document.getElementById('current-ip').textContent = 'fetching...';
   }
 }
 
 // ── Connect / Disconnect ──
 btnConnect.addEventListener('click', async () => {
   if (!activeProfileId) { appendLog('Select a profile first.', 'warn'); return; }
+  if (btnConnect.disabled) return;
   btnConnect.disabled = true;
   setStatus('connecting');
   appendLog('Starting OpenVPN...', 'info');
-  try { await ConnectProfile(activeProfileId); }
-  catch(e) { appendLog(`Error: ${e}`, 'error'); setStatus('disconnected'); }
+  try {
+    await ConnectProfile(activeProfileId);
+  } catch(e) {
+    if (String(e).includes('already connected')) {
+      appendLog('Detected stale connection — force disconnecting...', 'warn');
+      try { await Disconnect(); } catch(_) {}
+      // Small delay to let the process die
+      await new Promise(r => setTimeout(r, 1500));
+      try {
+        await ConnectProfile(activeProfileId);
+      } catch(e2) {
+        appendLog(`Error: ${e2}`, 'error');
+        setStatus('disconnected');
+      }
+    } else {
+      appendLog(`Error: ${e}`, 'error');
+      setStatus('disconnected');
+    }
+  }
 });
 
 btnDisconnect.addEventListener('click', async () => {
@@ -433,29 +546,65 @@ btnDisconnect.addEventListener('click', async () => {
 });
 
 // ── Speed test ──
+let speedBefore = null; // { downloadMbps, uploadMbps, viaVpn: false }
+let speedAfter  = null; // { downloadMbps, uploadMbps, viaVpn: true }
+
+function renderSpeedComparison() {
+  const dlEl  = document.getElementById('info-dl');
+  const ulEl  = document.getElementById('info-ul');
+  const cmpDl = document.getElementById('cmp-dl');
+  const cmpUl = document.getElementById('cmp-ul');
+  const ctx   = document.getElementById('speed-context');
+
+  const latest = speedAfter || speedBefore;
+  if (!latest) return;
+
+  dlEl.textContent = latest.downloadMbps + ' Mbps';
+  ulEl.textContent = latest.uploadMbps   + ' Mbps';
+
+  if (speedBefore && speedAfter) {
+    const dlDiff = speedAfter.downloadMbps - speedBefore.downloadMbps;
+    const ulDiff = speedAfter.uploadMbps   - speedBefore.uploadMbps;
+    const fmt = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + ' Mbps';
+    const cls = (v) => v >= 0 ? 'cmp-up' : 'cmp-down';
+    cmpDl.textContent = `${speedBefore.downloadMbps} → ${speedAfter.downloadMbps} Mbps (${fmt(dlDiff)})`;
+    cmpDl.className   = 'speed-tile-compare ' + cls(dlDiff);
+    cmpUl.textContent = `${speedBefore.uploadMbps} → ${speedAfter.uploadMbps} Mbps (${fmt(ulDiff)})`;
+    cmpUl.className   = 'speed-tile-compare ' + cls(ulDiff);
+    ctx.textContent   = 'Without VPN vs through VPN';
+    ctx.style.display = 'block';
+  } else {
+    cmpDl.textContent = cmpUl.textContent = '';
+    cmpDl.className = cmpUl.className = 'speed-tile-compare';
+    const label = latest.viaVpn ? 'through VPN' : 'without VPN';
+    ctx.textContent   = `Tested ${label} · Run again ${latest.viaVpn ? 'after disconnecting' : 'after connecting'} to compare`;
+    ctx.style.display = 'block';
+  }
+}
+
 document.getElementById('btn-speedtest').addEventListener('click', async () => {
   const btn = document.getElementById('btn-speedtest');
-  const dl  = document.getElementById('info-dl');
-  const ul  = document.getElementById('info-ul');
+  // Snapshot VPN state at the moment the test starts
+  const viaVpn = btnDisconnect.style.display !== 'none';
   btn.disabled = true;
   btn.textContent = 'Testing...';
-  dl.textContent = '...'; ul.textContent = '...';
+  document.getElementById('info-dl').textContent = '...';
+  document.getElementById('info-ul').textContent = '...';
   try {
     const r = await RunSpeedTest();
     if (r.error) {
-      dl.textContent = 'Error'; ul.textContent = 'Error';
       appendLog('Speed test error: ' + r.error, 'error');
     } else {
-      dl.textContent = r.downloadMbps + ' Mbps';
-      ul.textContent = r.uploadMbps + ' Mbps';
-      appendLog(`Speed test: ↓ ${r.downloadMbps} Mbps  ↑ ${r.uploadMbps} Mbps`, 'ok');
+      const result = { ...r, viaVpn };
+      if (viaVpn) speedAfter = result; else speedBefore = result;
+      renderSpeedComparison();
+      appendLog(`Speed test (${viaVpn ? 'through VPN' : 'no VPN'}): ↓ ${r.downloadMbps} Mbps  ↑ ${r.uploadMbps} Mbps`, 'ok');
     }
   } catch(e) {
-    dl.textContent = '—'; ul.textContent = '—';
     appendLog('Speed test failed: ' + e, 'error');
   }
   btn.disabled = false;
-  btn.textContent = 'Run Speed Test';
+  btn.textContent = '▶ Run';
 });
 
 // ── VPN events ──
@@ -466,7 +615,11 @@ EventsOn('vpn:reconnect', (data) => {
 });
 EventsOn('vpn:info', (info) => {
   if (info.vpnIp)     heroIp.textContent = info.vpnIp;
-  if (info.publicIp)  document.getElementById('info-public-ip').textContent = info.publicIp;
+  if (info.publicIp)  {
+    document.getElementById('info-public-ip').textContent = info.publicIp;
+    // Also update the profiles tab banner
+    document.getElementById('current-ip').textContent = info.publicIp;
+  }
   if (info.serverIp)  document.getElementById('info-server').textContent = info.serverIp;
   if (info.interface) document.getElementById('info-iface').textContent = info.interface;
   if (info.cipher)    document.getElementById('info-cipher').textContent = info.cipher;
@@ -479,9 +632,49 @@ EventsOn('vpn:log', (line) => {
   appendLog(line, type);
 });
 
+// ── Settings ──
+async function renderSettings() {
+  const cfg = await GetSettings();
+  const toggle  = document.getElementById('setting-autoconnect');
+  const profRow = document.getElementById('autoconnect-profile-row');
+  const select  = document.getElementById('setting-profile-select');
+
+  toggle.checked = cfg.autoConnect;
+  profRow.style.display = cfg.autoConnect ? 'flex' : 'none';
+
+  // Populate profile dropdown
+  select.innerHTML = profiles.map(p =>
+    `<option value="${p.id}" ${p.id === cfg.autoConnectProfileId ? 'selected' : ''}>${p.name}</option>`
+  ).join('');
+
+  const save = async () => {
+    const profileId = select.value || (profiles[0] ? profiles[0].id : '');
+    await SaveSettings(toggle.checked, toggle.checked ? profileId : '');
+  };
+
+  toggle.onchange = () => {
+    profRow.style.display = toggle.checked ? 'flex' : 'none';
+    save();
+  };
+  select.onchange = save;
+}
+
 // ── Init ──
 refreshProfiles();
 GetCurrentVersion().then(v => { document.getElementById('app-version').textContent = v; }).catch(() => {});
+
+// Fetch and display current public IP
+async function refreshPublicIP() {
+  // Local IP is instant — no delay needed
+  GetLocalIP()
+    .then(ip => { document.getElementById('local-ip').textContent = ip || 'unavailable'; })
+    .catch(() => { document.getElementById('local-ip').textContent = 'unavailable'; });
+  // Public IP needs network — give it time
+  GetPublicIP()
+    .then(ip => { document.getElementById('current-ip').textContent = ip || 'unavailable'; })
+    .catch(() => { document.getElementById('current-ip').textContent = 'unavailable'; });
+}
+setTimeout(refreshPublicIP, 200);
 
 // ── Update check ──
 async function runUpdateCheck() {

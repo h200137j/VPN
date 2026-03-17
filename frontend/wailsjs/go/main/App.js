@@ -38,8 +38,16 @@ export function GetCurrentVersion() {
   return window['go']['main']['App']['GetCurrentVersion']();
 }
 
+export function GetLocalIP() {
+  return window['go']['main']['App']['GetLocalIP']();
+}
+
 export function GetPublicIP() {
   return window['go']['main']['App']['GetPublicIP']();
+}
+
+export function GetSettings() {
+  return window['go']['main']['App']['GetSettings']();
 }
 
 export function GetTrafficStats() {
@@ -76,6 +84,10 @@ export function PingServer(arg1) {
 
 export function RunSpeedTest() {
   return window['go']['main']['App']['RunSpeedTest']();
+}
+
+export function SaveSettings(arg1, arg2) {
+  return window['go']['main']['App']['SaveSettings'](arg1, arg2);
 }
 
 export function UpdateProfile(arg1, arg2, arg3, arg4) {

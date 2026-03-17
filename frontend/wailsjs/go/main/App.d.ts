@@ -20,7 +20,11 @@ export function GetCertInfo(arg1:string):Promise<main.CertInfo>;
 
 export function GetCurrentVersion():Promise<string>;
 
+export function GetLocalIP():Promise<string>;
+
 export function GetPublicIP():Promise<string>;
+
+export function GetSettings():Promise<main.AppConfig>;
 
 export function GetTrafficStats():Promise<main.TrafficStats>;
 
@@ -39,5 +43,7 @@ export function PickOvpnFile():Promise<string>;
 export function PingServer(arg1:string):Promise<main.PingResult>;
 
 export function RunSpeedTest():Promise<main.SpeedResult>;
+
+export function SaveSettings(arg1:boolean,arg2:string):Promise<void>;
 
 export function UpdateProfile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -69,6 +70,17 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.initTray()
+
+	// Auto-connect if configured
+	cfg := loadAppConfig()
+	if cfg.AutoConnect && cfg.AutoConnectProfileID != "" {
+		go func() {
+			// Small delay to let the UI finish loading
+			time.Sleep(1500 * time.Millisecond)
+			runtime.EventsEmit(a.ctx, "vpn:log", "Auto-connecting...")
+			a.ConnectProfile(cfg.AutoConnectProfileID)
+		}()
+	}
 }
 
 // configDir returns ~/.config/govpn
@@ -205,7 +217,16 @@ func (a *App) PickOvpnFile() (string, error) {
 
 // GetPublicIP fetches the current public IP
 func (a *App) GetPublicIP() string {
-	client := &http.Client{Timeout: 5 * time.Second}
+	// Try curl first — avoids any Go HTTP proxy issues in dev mode
+	out, err := exec.Command("curl", "-s", "--max-time", "5", "https://api.ipify.org").Output()
+	if err == nil {
+		ip := strings.TrimSpace(string(out))
+		if ip != "" {
+			return ip
+		}
+	}
+	// Fallback to Go HTTP client
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get("https://api.ipify.org")
 	if err != nil {
 		return "unavailable"
@@ -213,6 +234,45 @@ func (a *App) GetPublicIP() string {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	return strings.TrimSpace(string(body))
+}
+
+// GetLocalIP returns the primary non-loopback local IP address
+func (a *App) GetLocalIP() string {
+	// Use 'ip route get' — fastest way to find the outbound interface IP
+	out, err := exec.Command("ip", "route", "get", "8.8.8.8").Output()
+	if err == nil {
+		// Output: "8.8.8.8 via 192.168.1.1 dev wlp0s20f3 src 192.168.1.100 ..."
+		if m := regexp.MustCompile(`src\s+([\d.]+)`).FindStringSubmatch(string(out)); m != nil {
+			return m[1]
+		}
+	}
+	// Fallback: walk interfaces
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "unavailable"
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		if strings.HasPrefix(iface.Name, "tun") || strings.HasPrefix(iface.Name, "tap") {
+			continue
+		}
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+				return ip.String()
+			}
+		}
+	}
+	return "unavailable"
 }
 
 // GetTrafficStats reads bytes from /proc/net/dev for the tun interface
@@ -342,10 +402,16 @@ func (a *App) connect(ovpnPath, username, password string) error {
 
 	go func() {
 		scanner := bufio.NewScanner(stdout)
+		authFailed := false
 		for scanner.Scan() {
 			line := scanner.Text()
 			runtime.EventsEmit(a.ctx, "vpn:log", line)
 			a.parseLine(line)
+			// Detect auth failure — no point retrying with wrong credentials
+			if strings.Contains(line, "AUTH_FAILED") || strings.Contains(line, "auth-failure") {
+				authFailed = true
+				runtime.EventsEmit(a.ctx, "vpn:log", "Authentication failed — check your credentials.")
+			}
 		}
 		a.mu.Lock()
 		connectedAt    := a.connectedAt
@@ -374,8 +440,8 @@ func (a *App) connect(ovpnPath, username, password string) error {
 		runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
 		a.trayStatusCh <- "disconnected"
 
-		// Auto-reconnect only on unexpected drops
-		if !wasManual && profileID != "" {
+		// Auto-reconnect only on unexpected drops, never on auth failure
+		if !wasManual && !authFailed && profileID != "" {
 			a.startReconnectLoop(profileID)
 		}
 	}()
@@ -420,20 +486,18 @@ func (a *App) parseLine(line string) {
 func (a *App) Disconnect() error {
 	a.mu.Lock()
 
-	if a.vpnProcess == nil {
-		// Cancel any pending reconnect even if not currently connected
-		if a.reconnectCancel != nil {
-			close(a.reconnectCancel)
-			a.reconnectCancel = nil
-		}
-		a.mu.Unlock()
-		return fmt.Errorf("not connected")
-	}
-
+	// Always cancel any pending reconnect loop first
 	a.manualDisconnect = true
 	if a.reconnectCancel != nil {
 		close(a.reconnectCancel)
 		a.reconnectCancel = nil
+	}
+
+	if a.vpnProcess == nil {
+		a.mu.Unlock()
+		runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
+		a.trayStatusCh <- "disconnected"
+		return nil
 	}
 	a.mu.Unlock()
 
@@ -642,7 +706,9 @@ type UpdateInfo struct {
 
 // AppConfig persists lightweight app state between launches
 type AppConfig struct {
-	LastSeenVersion string `json:"lastSeenVersion"`
+	LastSeenVersion      string `json:"lastSeenVersion"`
+	AutoConnect          bool   `json:"autoConnect"`
+	AutoConnectProfileID string `json:"autoConnectProfileId"`
 }
 
 func appConfigPath() string {
@@ -663,6 +729,20 @@ func saveAppConfig(cfg AppConfig) {
 	os.MkdirAll(configDir(), 0700)
 	data, _ := json.MarshalIndent(cfg, "", "  ")
 	os.WriteFile(appConfigPath(), data, 0600)
+}
+
+// GetSettings returns the current app config
+func (a *App) GetSettings() AppConfig {
+	return loadAppConfig()
+}
+
+// SaveSettings persists app settings
+func (a *App) SaveSettings(autoConnect bool, autoConnectProfileID string) error {
+	cfg := loadAppConfig()
+	cfg.AutoConnect = autoConnect
+	cfg.AutoConnectProfileID = autoConnectProfileID
+	saveAppConfig(cfg)
+	return nil
 }
 
 // GetCurrentVersion returns the build-time version string
