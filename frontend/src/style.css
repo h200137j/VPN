@@ -816,6 +816,7 @@ button {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  padding-right: 8px;
 }
 
 .cert-expiry {
@@ -993,3 +994,36 @@ button {
   padding: 11px;
   font-size: 14px;
 }
+
+/* ── PING BADGE ── */
+.ping-badge {
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 3px;
+  transition: color 0.3s;
+}
+
+.ping-badge.pinging { color: var(--muted); }
+.ping-badge.good    { color: var(--success); }
+.ping-badge.ok      { color: var(--warning); }
+.ping-badge.poor    { color: var(--danger); }
+.ping-badge.unreachable { color: var(--danger); }
+
+/* ── SPEED TEST BUTTON ── */
+.btn-speedtest {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+.btn-speedtest:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(91,141,238,0.08);
+}
+.btn-speedtest:disabled { opacity: 0.5; cursor: not-allowed; }

@@ -70,6 +70,14 @@ export function PickOvpnFile() {
   return window['go']['main']['App']['PickOvpnFile']();
 }
 
+export function PingServer(arg1) {
+  return window['go']['main']['App']['PingServer'](arg1);
+}
+
+export function RunSpeedTest() {
+  return window['go']['main']['App']['RunSpeedTest']();
+}
+
 export function UpdateProfile(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateProfile'](arg1, arg2, arg3, arg4);
 }

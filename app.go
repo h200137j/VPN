@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -558,7 +559,77 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", m, s)
 }
 
-// ── Update / Changelog ──────────────────────────────────────────────────────
+// PingResult holds the result of a pre-connect ping
+type PingResult struct {
+	Host       string  `json:"host"`
+	Reachable  bool    `json:"reachable"`
+	MinMs      float64 `json:"minMs"`
+	AvgMs      float64 `json:"avgMs"`
+	MaxMs      float64 `json:"maxMs"`
+	PacketLoss float64 `json:"packetLoss"`
+	Error      string  `json:"error,omitempty"`
+}
+
+// PingServer extracts the remote host from the ovpn config and pings it
+func (a *App) PingServer(profileID string) PingResult {
+	profiles, err := a.LoadProfiles()
+	if err != nil {
+		return PingResult{Error: err.Error()}
+	}
+	var ovpnPath string
+	for _, p := range profiles {
+		if p.ID == profileID {
+			ovpnPath = p.OvpnPath
+			break
+		}
+	}
+	if ovpnPath == "" {
+		return PingResult{Error: "profile not found"}
+	}
+
+	// Parse remote host from ovpn file
+	host, err := parseRemoteHost(ovpnPath)
+	if err != nil {
+		return PingResult{Error: "could not parse server: " + err.Error()}
+	}
+
+	// Run ping -c 4 -W 3
+	out, err := exec.Command("ping", "-c", "4", "-W", "3", host).Output()
+	if err != nil {
+		return PingResult{Host: host, Reachable: false, Error: "unreachable"}
+	}
+
+	result := PingResult{Host: host, Reachable: true}
+	outStr := string(out)
+
+	// Parse packet loss: "2 received, 0% packet loss"
+	if m := regexp.MustCompile(`(\d+(?:\.\d+)?)% packet loss`).FindStringSubmatch(outStr); m != nil {
+		result.PacketLoss, _ = strconv.ParseFloat(m[1], 64)
+	}
+	// Parse rtt: "rtt min/avg/max/mdev = 10.1/12.3/15.0/1.2 ms"
+	if m := regexp.MustCompile(`rtt min/avg/max/mdev = ([\d.]+)/([\d.]+)/([\d.]+)`).FindStringSubmatch(outStr); m != nil {
+		result.MinMs, _ = strconv.ParseFloat(m[1], 64)
+		result.AvgMs, _ = strconv.ParseFloat(m[2], 64)
+		result.MaxMs, _ = strconv.ParseFloat(m[3], 64)
+	}
+	return result
+}
+
+// parseRemoteHost reads the first "remote <host> <port>" line from an ovpn file
+func parseRemoteHost(ovpnPath string) (string, error) {
+	data, err := os.ReadFile(ovpnPath)
+	if err != nil {
+		return "", err
+	}
+	re := regexp.MustCompile(`(?m)^remote\s+(\S+)`)
+	m := re.FindStringSubmatch(string(data))
+	if m == nil {
+		return "", fmt.Errorf("no remote directive found")
+	}
+	return m[1], nil
+}
+
+
 
 // UpdateInfo holds the result of a GitHub update check
 type UpdateInfo struct {
@@ -655,4 +726,61 @@ func (a *App) CheckChangelog() string {
 	cfg.LastSeenVersion = version
 	saveAppConfig(cfg)
 	return release.Body
+}
+
+// ── Speed Test ───────────────────────────────────────────────────────────────
+
+// SpeedResult holds download/upload measurements
+type SpeedResult struct {
+	DownloadMbps float64 `json:"downloadMbps"`
+	UploadMbps   float64 `json:"uploadMbps"`
+	Error        string  `json:"error,omitempty"`
+}
+
+// RunSpeedTest measures download and upload speed through the active connection
+func (a *App) RunSpeedTest() SpeedResult {
+	const testURL   = "https://speed.cloudflare.com/__down?bytes=10000000"
+	const uploadURL = "https://speed.cloudflare.com/__up"
+	const uploadSize = 5 * 1024 * 1024
+
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Download
+	dlStart := time.Now()
+	resp, err := client.Get(testURL)
+	if err != nil {
+		return SpeedResult{Error: "download failed: " + err.Error()}
+	}
+	n, err := io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return SpeedResult{Error: "download read failed: " + err.Error()}
+	}
+	dlMbps := float64(n) * 8 / time.Since(dlStart).Seconds() / 1_000_000
+
+	// Upload
+	ulStart := time.Now()
+	uresp, err := client.Post(uploadURL, "application/octet-stream",
+		io.LimitReader(&seqReader{}, int64(uploadSize)))
+	if err == nil {
+		io.Copy(io.Discard, uresp.Body)
+		uresp.Body.Close()
+	}
+	ulMbps := float64(uploadSize) * 8 / time.Since(ulStart).Seconds() / 1_000_000
+
+	return SpeedResult{
+		DownloadMbps: math.Round(dlMbps*10) / 10,
+		UploadMbps:   math.Round(ulMbps*10) / 10,
+	}
+}
+
+// seqReader produces deterministic bytes for the upload payload
+type seqReader struct{ pos int }
+
+func (r *seqReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = byte(r.pos % 251)
+		r.pos++
+	}
+	return len(p), nil
 }

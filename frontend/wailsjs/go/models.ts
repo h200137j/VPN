@@ -44,6 +44,30 @@ export namespace main {
 	        this.isWarning = source["isWarning"];
 	    }
 	}
+	export class PingResult {
+	    host: string;
+	    reachable: boolean;
+	    minMs: number;
+	    avgMs: number;
+	    maxMs: number;
+	    packetLoss: number;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PingResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.reachable = source["reachable"];
+	        this.minMs = source["minMs"];
+	        this.avgMs = source["avgMs"];
+	        this.maxMs = source["maxMs"];
+	        this.packetLoss = source["packetLoss"];
+	        this.error = source["error"];
+	    }
+	}
 	export class Profile {
 	    id: string;
 	    name: string;
@@ -62,6 +86,22 @@ export namespace main {
 	        this.ovpnPath = source["ovpnPath"];
 	        this.username = source["username"];
 	        this.password = source["password"];
+	    }
+	}
+	export class SpeedResult {
+	    downloadMbps: number;
+	    uploadMbps: number;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SpeedResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.downloadMbps = source["downloadMbps"];
+	        this.uploadMbps = source["uploadMbps"];
+	        this.error = source["error"];
 	    }
 	}
 	export class TrafficStats {

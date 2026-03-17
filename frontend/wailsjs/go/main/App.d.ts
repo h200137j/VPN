@@ -36,4 +36,8 @@ export function LoadProfiles():Promise<Array<main.Profile>>;
 
 export function PickOvpnFile():Promise<string>;
 
+export function PingServer(arg1:string):Promise<main.PingResult>;
+
+export function RunSpeedTest():Promise<main.SpeedResult>;
+
 export function UpdateProfile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

@@ -3,7 +3,8 @@ import {
   ImportProfile, LoadProfiles, UpdateProfile, DeleteProfile,
   ConnectProfile, Disconnect, PickOvpnFile, GetTrafficStats,
   LoadAuditLog, ClearAuditLog, CheckProfileCerts,
-  CheckForUpdate, CheckChangelog
+  CheckForUpdate, CheckChangelog, GetCurrentVersion, PingServer,
+  RunSpeedTest
 } from '../wailsjs/go/main/App';
 import { EventsOn, WindowSetSize, BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
@@ -96,7 +97,10 @@ document.querySelector('#app').innerHTML = `
       <div class="info-tile"><div class="info-tile-icon">🔒</div><div class="info-tile-body"><div class="info-tile-label">Cipher</div><div class="info-tile-value" id="info-cipher">—</div></div></div>
       <div class="info-tile"><div class="info-tile-icon">⬇</div><div class="info-tile-body"><div class="info-tile-label">Downloaded</div><div class="info-tile-value" id="info-rx">—</div></div></div>
       <div class="info-tile"><div class="info-tile-icon">⬆</div><div class="info-tile-body"><div class="info-tile-label">Uploaded</div><div class="info-tile-value" id="info-tx">—</div></div></div>
+      <div class="info-tile"><div class="info-tile-icon">⬇️</div><div class="info-tile-body"><div class="info-tile-label">Download Speed</div><div class="info-tile-value" id="info-dl">—</div></div></div>
+      <div class="info-tile"><div class="info-tile-icon">⬆️</div><div class="info-tile-body"><div class="info-tile-label">Upload Speed</div><div class="info-tile-value" id="info-ul">—</div></div></div>
     </div>
+    <button class="btn-speedtest" id="btn-speedtest">Run Speed Test</button>
   </div>
 
   <div class="action-row">
@@ -112,7 +116,7 @@ document.querySelector('#app').innerHTML = `
     <div class="log-box" id="log"></div>
   </div>
 
-  <div class="footer">made with ❤️ by uriel</div>
+  <div class="footer">made with ❤️ by uriel &nbsp;·&nbsp; <span id="app-version">dev</span></div>
 
   <!-- Update banner (hidden by default) -->
   <div class="update-banner" id="update-banner" style="display:none">
@@ -223,9 +227,9 @@ async function loadCertWarnings() {
 function certBadge(profileId) {
   const info = certWarnings[profileId];
   if (!info) return '<span class="cert-expiry none">No cert</span>';
-  if (info.isExpired) return `<span class="cert-expiry expired" title="Certificate expired">⚠ Expired</span>`;
-  if (info.isWarning) return `<span class="cert-expiry warning" title="Expiring soon">⚠ ${info.expiresAt}</span>`;
-  return `<span class="cert-expiry ok" title="${info.daysLeft} days remaining">✓ ${info.expiresAt}</span>`;
+  if (info.isExpired) return `<span class="cert-expiry expired" title="Certificate expired on ${info.expiresAt}">⚠ Expired ${info.expiresAt}</span>`;
+  if (info.isWarning) return `<span class="cert-expiry warning" title="Certificate expiring soon">⚠ Expires ${info.expiresAt}</span>`;
+  return `<span class="cert-expiry ok" title="${info.daysLeft} days remaining">✓ Expires ${info.expiresAt}</span>`;
 }
 
 // ── Profile rendering ──
@@ -244,6 +248,7 @@ function renderProfiles() {
       <div class="profile-info">
         <div class="profile-name">${p.name}</div>
         <div class="profile-meta">${p.username || 'no username'}</div>
+        <div class="ping-badge" id="ping-${p.id}"></div>
       </div>
       <div class="profile-cert">${certBadge(p.id)}</div>
       <div class="profile-actions">
@@ -277,6 +282,33 @@ async function refreshProfiles() {
   if (!activeProfileId && profiles.length > 0) activeProfileId = profiles[0].id;
   await loadCertWarnings();
   renderProfiles();
+  // Auto-ping: always ping all profiles after render
+  pingAllProfiles();
+}
+
+// ── Ping ──
+function setPingBadge(profileId, text, cls) {
+  const el = document.getElementById('ping-' + profileId);
+  if (el) { el.textContent = text; el.className = 'ping-badge ' + cls; }
+}
+
+async function pingAllProfiles() {
+  for (const p of profiles) {
+    setPingBadge(p.id, '📡 pinging...', 'pinging');
+    try {
+      const r = await PingServer(p.id);
+      if (!r.reachable) {
+        setPingBadge(p.id, '📡 unreachable', 'unreachable');
+      } else {
+        const loss = r.packetLoss > 0 ? ` · ${r.packetLoss}% loss` : '';
+        const quality = r.avgMs < 50 ? 'good' : r.avgMs < 120 ? 'ok' : 'poor';
+        const qualityLabel = r.avgMs < 50 ? 'Excellent' : r.avgMs < 120 ? 'Good' : 'Poor';
+        setPingBadge(p.id, `📡 ${r.avgMs.toFixed(0)}ms avg · ${qualityLabel}${loss}`, quality);
+      }
+    } catch(_) {
+      setPingBadge(p.id, '', '');
+    }
+  }
 }
 
 // ── Add / Edit form ──
@@ -400,6 +432,32 @@ btnDisconnect.addEventListener('click', async () => {
   try { await Disconnect(); } catch(e) { appendLog(`Error: ${e}`, 'error'); }
 });
 
+// ── Speed test ──
+document.getElementById('btn-speedtest').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-speedtest');
+  const dl  = document.getElementById('info-dl');
+  const ul  = document.getElementById('info-ul');
+  btn.disabled = true;
+  btn.textContent = 'Testing...';
+  dl.textContent = '...'; ul.textContent = '...';
+  try {
+    const r = await RunSpeedTest();
+    if (r.error) {
+      dl.textContent = 'Error'; ul.textContent = 'Error';
+      appendLog('Speed test error: ' + r.error, 'error');
+    } else {
+      dl.textContent = r.downloadMbps + ' Mbps';
+      ul.textContent = r.uploadMbps + ' Mbps';
+      appendLog(`Speed test: ↓ ${r.downloadMbps} Mbps  ↑ ${r.uploadMbps} Mbps`, 'ok');
+    }
+  } catch(e) {
+    dl.textContent = '—'; ul.textContent = '—';
+    appendLog('Speed test failed: ' + e, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Run Speed Test';
+});
+
 // ── VPN events ──
 EventsOn('vpn:status', setStatus);
 EventsOn('vpn:reconnect', (data) => {
@@ -423,6 +481,7 @@ EventsOn('vpn:log', (line) => {
 
 // ── Init ──
 refreshProfiles();
+GetCurrentVersion().then(v => { document.getElementById('app-version').textContent = v; }).catch(() => {});
 
 // ── Update check ──
 async function runUpdateCheck() {
