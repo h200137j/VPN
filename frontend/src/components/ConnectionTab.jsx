@@ -151,7 +151,154 @@ function ConnectedHero({ vpnInfo, connectedAt }) {
   );
 }
 
-// ── Connecting / Disconnecting screen ────────────────────────────────────────
+// ── Network Map ─────────────────────────────────────────────────────────────
+function NetworkMap({ vpnInfo }) {
+  const canvasRef = useRef(null);
+  const rafRef    = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth;
+    const H = canvas.offsetHeight;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Node x positions (matching the DOM nodes at 14%, 50%, 86%)
+    const y = H / 2;
+    const nodes = [
+      { x: W * 0.14 },
+      { x: W * 0.50 },
+      { x: W * 0.86 },
+    ];
+    const NODE_R = 28;
+    const COLORS = ['91,141,238', '62,207,142', '124,106,247'];
+
+    const packets = [
+      // outbound (left → right), travel slightly above center
+      { seg: 0, t: 0.0,  speed:  0.007, size: 3,   color: '62,207,142',  dir: 1, dy: -4 },
+      { seg: 0, t: 0.4,  speed:  0.005, size: 2,   color: '91,141,238',  dir: 1, dy: -4 },
+      { seg: 0, t: 0.75, speed:  0.008, size: 2.5, color: '62,207,142',  dir: 1, dy: -4 },
+      { seg: 1, t: 0.2,  speed:  0.006, size: 3,   color: '124,106,247', dir: 1, dy: -4 },
+      { seg: 1, t: 0.6,  speed:  0.005, size: 2,   color: '62,207,142',  dir: 1, dy: -4 },
+      { seg: 1, t: 0.9,  speed:  0.007, size: 2.5, color: '124,106,247', dir: 1, dy: -4 },
+      // inbound (right → left), travel slightly below center
+      { seg: 0, t: 0.6,  speed: -0.006, size: 2.5, color: '91,141,238',  dir: -1, dy: 4 },
+      { seg: 0, t: 0.2,  speed: -0.005, size: 2,   color: '62,207,142',  dir: -1, dy: 4 },
+      { seg: 1, t: 0.8,  speed: -0.007, size: 3,   color: '124,106,247', dir: -1, dy: 4 },
+      { seg: 1, t: 0.35, speed: -0.005, size: 2,   color: '62,207,142',  dir: -1, dy: 4 },
+    ];
+
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+
+      // Draw edges — two lanes per segment
+      for (let i = 0; i < 2; i++) {
+        const ax = nodes[i].x + NODE_R;
+        const bx = nodes[i + 1].x - NODE_R;
+        // outbound lane
+        ctx.beginPath();
+        ctx.setLineDash([5, 7]);
+        ctx.moveTo(ax, y - 4);
+        ctx.lineTo(bx, y - 4);
+        ctx.strokeStyle = `rgba(${COLORS[i]},0.18)`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // inbound lane
+        ctx.beginPath();
+        ctx.moveTo(ax, y + 4);
+        ctx.lineTo(bx, y + 4);
+        ctx.strokeStyle = `rgba(${COLORS[i]},0.18)`;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Draw packets
+      packets.forEach(p => {
+        p.t += p.speed;
+        if (p.t > 1) p.t = 0;
+        if (p.t < 0) p.t = 1;
+        const ax = nodes[p.seg].x + NODE_R;
+        const bx = nodes[p.seg + 1].x - NODE_R;
+        const x  = ax + (bx - ax) * p.t;
+        const py = y + p.dy;
+
+        // trail (always points in travel direction)
+        const trailLen = 18;
+        const tx0 = p.speed > 0 ? x - trailLen : x + trailLen;
+        const trail = ctx.createLinearGradient(tx0, py, x, py);
+        trail.addColorStop(0, `rgba(${p.color},0)`);
+        trail.addColorStop(1, `rgba(${p.color},0.35)`);
+        ctx.beginPath();
+        ctx.moveTo(tx0, py);
+        ctx.lineTo(x, py);
+        ctx.strokeStyle = trail;
+        ctx.lineWidth = p.size;
+        ctx.stroke();
+
+        // glow
+        const grd = ctx.createRadialGradient(x, py, 0, x, py, p.size * 4);
+        grd.addColorStop(0, `rgba(${p.color},0.9)`);
+        grd.addColorStop(1, `rgba(${p.color},0)`);
+        ctx.beginPath();
+        ctx.arc(x, py, p.size * 4, 0, Math.PI * 2);
+        ctx.fillStyle = grd;
+        ctx.fill();
+
+        // core dot
+        ctx.beginPath();
+        ctx.arc(x, py, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${p.color},1)`;
+        ctx.fill();
+      });
+
+      rafRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const serverLabel = vpnInfo.serverIp || 'VPN Server';
+  const publicLabel = vpnInfo.publicIp  || 'Public IP';
+
+  return (
+    <div className="netmap-wrap">
+      <div className="netmap-title">Network Path</div>
+      <div className="netmap-stage">
+        <canvas ref={canvasRef} className="netmap-canvas" />
+        {/* DOM nodes overlaid */}
+        <div className="netmap-nodes">
+          <div className="netmap-node" style={{ '--nc': '#5b8dee' }}>
+            <div className="netmap-node-circle">💻</div>
+            <div className="netmap-node-label">You</div>
+            <div className="netmap-node-sub">Device</div>
+          </div>
+          <div className="netmap-node" style={{ '--nc': '#3ecf8e' }}>
+            <div className="netmap-node-circle">🛡️</div>
+            <div className="netmap-node-label">VPN</div>
+            <div className="netmap-node-sub">{serverLabel.length > 18 ? serverLabel.slice(0,17)+'…' : serverLabel}</div>
+          </div>
+          <div className="netmap-node" style={{ '--nc': '#7c6af7' }}>
+            <div className="netmap-node-circle">🌐</div>
+            <div className="netmap-node-label">Internet</div>
+            <div className="netmap-node-sub">{publicLabel.length > 18 ? publicLabel.slice(0,17)+'…' : publicLabel}</div>
+          </div>
+        </div>
+        {/* Lock badges on the lines */}
+        <div className="netmap-locks">
+          <div className="netmap-lock">🔒</div>
+          <div className="netmap-lock">🔒</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function TransitionScreen({ mode }) {
   const isDisconnecting = mode === 'disconnecting';
   const msgs  = isDisconnecting ? DISCONNECTING_MSGS : CONNECTING_MSGS;
@@ -247,6 +394,8 @@ export default function ConnectionTab({ vpn, disconnecting }) {
           ))}
         </div>
       )}
+
+      {isConnected && <NetworkMap vpnInfo={vpn.vpnInfo} />}
 
       <LogBox logs={vpn.logs} onClear={() => vpn.setLogs([])} />
     </div>
