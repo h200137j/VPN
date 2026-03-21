@@ -17,6 +17,15 @@ let connectedAt = null;
 let certWarnings = {};
 
 document.querySelector('#app').innerHTML = `
+  <!-- Update banner (hidden by default) -->
+  <div class="update-banner" id="update-banner" style="display:none">
+    <span class="update-banner-text">
+      🚀 <strong id="update-version"></strong> is available
+    </span>
+    <a class="update-banner-link" id="update-link" href="#">Download</a>
+    <button class="update-banner-dismiss" id="update-dismiss">✕</button>
+  </div>
+
   <div class="header">
     <div class="logo-area">
       <div class="shield" id="shield">
@@ -169,6 +178,26 @@ document.querySelector('#app').innerHTML = `
         </div>
         <select class="setting-select" id="setting-profile-select"></select>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Launch on login</div>
+          <div class="setting-desc">Start GoVPN automatically when you log in</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="setting-launch-on-login"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Start minimized to tray</div>
+          <div class="setting-desc">Open in the system tray instead of showing the window</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="setting-start-minimized"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
   </div>
 
@@ -194,15 +223,6 @@ document.querySelector('#app').innerHTML = `
   </div>
 
   <div class="footer">made with ❤️ by uriel &nbsp;·&nbsp; <span id="app-version">dev</span></div>
-
-  <!-- Update banner (hidden by default) -->
-  <div class="update-banner" id="update-banner" style="display:none">
-    <span class="update-banner-text">
-      🚀 <strong id="update-version"></strong> is available
-    </span>
-    <a class="update-banner-link" id="update-link" href="#">Download</a>
-    <button class="update-banner-dismiss" id="update-dismiss">✕</button>
-  </div>
 
   <!-- Changelog modal (hidden by default) -->
   <div class="modal-overlay" id="changelog-overlay" style="display:none">
@@ -635,28 +655,38 @@ EventsOn('vpn:log', (line) => {
 // ── Settings ──
 async function renderSettings() {
   const cfg = await GetSettings();
-  const toggle  = document.getElementById('setting-autoconnect');
-  const profRow = document.getElementById('autoconnect-profile-row');
-  const select  = document.getElementById('setting-profile-select');
+  const toggle      = document.getElementById('setting-autoconnect');
+  const profRow     = document.getElementById('autoconnect-profile-row');
+  const select      = document.getElementById('setting-profile-select');
+  const loginToggle = document.getElementById('setting-launch-on-login');
+  const trayToggle  = document.getElementById('setting-start-minimized');
 
-  toggle.checked = cfg.autoConnect;
+  toggle.checked      = cfg.autoConnect;
+  loginToggle.checked = cfg.launchOnLogin;
+  trayToggle.checked  = cfg.startMinimized;
   profRow.style.display = cfg.autoConnect ? 'flex' : 'none';
 
-  // Populate profile dropdown
   select.innerHTML = profiles.map(p =>
     `<option value="${p.id}" ${p.id === cfg.autoConnectProfileId ? 'selected' : ''}>${p.name}</option>`
   ).join('');
 
   const save = async () => {
     const profileId = select.value || (profiles[0] ? profiles[0].id : '');
-    await SaveSettings(toggle.checked, toggle.checked ? profileId : '');
+    await SaveSettings(
+      toggle.checked,
+      toggle.checked ? profileId : '',
+      loginToggle.checked,
+      trayToggle.checked
+    );
   };
 
   toggle.onchange = () => {
     profRow.style.display = toggle.checked ? 'flex' : 'none';
     save();
   };
-  select.onchange = save;
+  select.onchange      = save;
+  loginToggle.onchange = save;
+  trayToggle.onchange  = save;
 }
 
 // ── Init ──

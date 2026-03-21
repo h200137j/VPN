@@ -71,11 +71,16 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.initTray()
 
-	// Auto-connect if configured
 	cfg := loadAppConfig()
+
+	// Start minimized to tray if configured
+	if cfg.StartMinimized {
+		runtime.WindowHide(a.ctx)
+	}
+
+	// Auto-connect if configured
 	if cfg.AutoConnect && cfg.AutoConnectProfileID != "" {
 		go func() {
-			// Small delay to let the UI finish loading
 			time.Sleep(1500 * time.Millisecond)
 			runtime.EventsEmit(a.ctx, "vpn:log", "Auto-connecting...")
 			a.ConnectProfile(cfg.AutoConnectProfileID)
@@ -773,6 +778,8 @@ type AppConfig struct {
 	LastSeenVersion      string `json:"lastSeenVersion"`
 	AutoConnect          bool   `json:"autoConnect"`
 	AutoConnectProfileID string `json:"autoConnectProfileId"`
+	LaunchOnLogin        bool   `json:"launchOnLogin"`
+	StartMinimized       bool   `json:"startMinimized"`
 }
 
 func appConfigPath() string {
@@ -801,12 +808,61 @@ func (a *App) GetSettings() AppConfig {
 }
 
 // SaveSettings persists app settings
-func (a *App) SaveSettings(autoConnect bool, autoConnectProfileID string) error {
+func (a *App) SaveSettings(autoConnect bool, autoConnectProfileID string, launchOnLogin bool, startMinimized bool) error {
 	cfg := loadAppConfig()
 	cfg.AutoConnect = autoConnect
 	cfg.AutoConnectProfileID = autoConnectProfileID
+	cfg.StartMinimized = startMinimized
+
+	// Handle launch on login separately
+	if launchOnLogin != cfg.LaunchOnLogin {
+		if err := setAutostart(launchOnLogin, startMinimized); err != nil {
+			return err
+		}
+	}
+	cfg.LaunchOnLogin = launchOnLogin
 	saveAppConfig(cfg)
 	return nil
+}
+
+// setAutostart writes or removes the ~/.config/autostart/govpn.desktop file
+func setAutostart(enable bool, startMinimized bool) error {
+	home, _ := os.UserHomeDir()
+	autostartDir  := filepath.Join(home, ".config", "autostart")
+	desktopFile   := filepath.Join(autostartDir, "govpn.desktop")
+
+	if !enable {
+		os.Remove(desktopFile)
+		return nil
+	}
+
+	// Find our own executable path
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine executable path: %w", err)
+	}
+
+	if err := os.MkdirAll(autostartDir, 0755); err != nil {
+		return err
+	}
+
+	hidden := "false"
+	if startMinimized {
+		hidden = "true"
+	}
+
+	content := fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=GoVPN
+Comment=Lightweight OpenVPN client
+Exec=%s
+Icon=govpn
+Terminal=false
+Hidden=%s
+X-GNOME-Autostart-enabled=true
+`, exe, hidden)
+
+	return os.WriteFile(desktopFile, []byte(content), 0644)
 }
 
 // GetCurrentVersion returns the build-time version string
