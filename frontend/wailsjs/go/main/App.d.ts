@@ -44,6 +44,6 @@ export function PingServer(arg1:string):Promise<main.PingResult>;
 
 export function RunSpeedTest():Promise<main.SpeedResult>;
 
-export function SaveSettings(arg1:boolean,arg2:string):Promise<void>;
+export function SaveSettings(arg1:boolean,arg2:string,arg3:boolean,arg4:boolean):Promise<void>;
 
 export function UpdateProfile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

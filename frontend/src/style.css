@@ -1061,7 +1061,6 @@ button {
   font-size: 11px;
   color: var(--muted);
   text-align: center;
-  display: none;
 }
 
 .btn-speedtest {

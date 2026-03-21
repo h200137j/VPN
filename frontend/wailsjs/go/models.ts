@@ -4,6 +4,8 @@ export namespace main {
 	    lastSeenVersion: string;
 	    autoConnect: boolean;
 	    autoConnectProfileId: string;
+	    launchOnLogin: boolean;
+	    startMinimized: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -14,6 +16,8 @@ export namespace main {
 	        this.lastSeenVersion = source["lastSeenVersion"];
 	        this.autoConnect = source["autoConnect"];
 	        this.autoConnectProfileId = source["autoConnectProfileId"];
+	        this.launchOnLogin = source["launchOnLogin"];
+	        this.startMinimized = source["startMinimized"];
 	    }
 	}
 	export class AuditEntry {
