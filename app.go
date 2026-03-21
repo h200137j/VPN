@@ -400,6 +400,8 @@ func (a *App) connect(ovpnPath, username, password string) error {
 	runtime.EventsEmit(a.ctx, "vpn:status", "connecting")
 	a.trayStatusCh <- "connecting"
 
+	go a.healthCheck()
+
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		authFailed := false
@@ -533,7 +535,69 @@ func (a *App) IsConnected() bool {
 	return a.connected
 }
 
-// startReconnectLoop retries connecting with exponential backoff (5 attempts max)
+// healthCheck runs while connected and detects silent drops (e.g. after suspend/resume)
+func (a *App) healthCheck() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		a.mu.Lock()
+		connected := a.connected
+		iface     := a.vpnInfo.Interface
+		profileID := a.activeProfileID
+		manual    := a.manualDisconnect
+		a.mu.Unlock()
+
+		if !connected || manual {
+			return
+		}
+
+		// Check 1: tun interface still exists
+		if iface != "" {
+			out, err := exec.Command("ip", "link", "show", iface).Output()
+			if err != nil || !strings.Contains(string(out), "UP") {
+				runtime.EventsEmit(a.ctx, "vpn:log", "Health check: tun interface gone — reconnecting...")
+				a.forceReconnect(profileID)
+				return
+			}
+		}
+
+		// Check 2: ping the VPN gateway
+		a.mu.Lock()
+		gateway := a.vpnInfo.Gateway
+		a.mu.Unlock()
+		if gateway != "" {
+			err := exec.Command("ping", "-c", "1", "-W", "3", "-I", iface, gateway).Run()
+			if err != nil {
+				runtime.EventsEmit(a.ctx, "vpn:log", "Health check: gateway unreachable — reconnecting...")
+				a.forceReconnect(profileID)
+				return
+			}
+		}
+	}
+}
+
+// forceReconnect kills the current process and starts a fresh reconnect loop
+func (a *App) forceReconnect(profileID string) {
+	a.mu.Lock()
+	proc := a.vpnProcess
+	a.connected = false
+	a.vpnProcess = nil
+	a.mu.Unlock()
+
+	if proc != nil {
+		proc.Process.Kill()
+		proc.Wait()
+	}
+
+	runtime.EventsEmit(a.ctx, "vpn:status", "disconnected")
+	a.trayStatusCh <- "disconnected"
+
+	if profileID != "" {
+		a.startReconnectLoop(profileID)
+	}
+}
+
+
 func (a *App) startReconnectLoop(profileID string) {
 	cancel := make(chan struct{})
 	a.mu.Lock()
