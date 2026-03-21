@@ -22,6 +22,10 @@ export function ConnectProfile(arg1) {
   return window['go']['main']['App']['ConnectProfile'](arg1);
 }
 
+export function DeleteAuditEntry(arg1) {
+  return window['go']['main']['App']['DeleteAuditEntry'](arg1);
+}
+
 export function DeleteProfile(arg1) {
   return window['go']['main']['App']['DeleteProfile'](arg1);
 }

@@ -8,10 +8,23 @@ function certBadge(info) {
   return <span className="cert-expiry ok" title={`${info.daysLeft} days remaining`}>✓ Expires {info.expiresAt}</span>;
 }
 
+// 6 ping loading animations that cycle while waiting
+const PING_ANIMATIONS = [
+  () => <span className="ping-anim dots">pinging<span>.</span><span>.</span><span>.</span></span>,
+  () => <span className="ping-anim radar">📡 <span className="radar-spin">◌</span></span>,
+  () => <span className="ping-anim bounce"><span>p</span><span>i</span><span>n</span><span>g</span><span>!</span></span>,
+  () => <span className="ping-anim pulse-bar"><span/><span/><span/><span/><span/></span>,
+  () => <span className="ping-anim typewriter">asking nicely...</span>,
+  () => <span className="ping-anim zap">⚡ <span className="zap-flicker">measuring</span></span>,
+];
+
 function PingBadge({ profileId, PingServer }) {
-  const [ping, setPing] = useState({ text: '📡 pinging...', cls: 'pinging' });
+  const [ping, setPing] = useState(null); // null = loading
+  const [animIdx, setAnimIdx] = useState(0);
 
   useEffect(() => {
+    setPing(null);
+    setAnimIdx(0);
     PingServer(profileId).then(r => {
       if (!r.reachable) {
         setPing({ text: '📡 unreachable', cls: 'unreachable' });
@@ -19,10 +32,22 @@ function PingBadge({ profileId, PingServer }) {
         const loss = r.packetLoss > 0 ? ` · ${r.packetLoss}% loss` : '';
         const quality = r.avgMs < 50 ? 'good' : r.avgMs < 120 ? 'ok' : 'poor';
         const label   = r.avgMs < 50 ? 'Excellent' : r.avgMs < 120 ? 'Good' : 'Poor';
-        setPing({ text: `📡 ${r.avgMs.toFixed(0)}ms avg · ${label}${loss}`, cls: quality });
+        setPing({ text: `📡 ${r.avgMs.toFixed(0)}ms · ${label}${loss}`, cls: quality });
       }
     }).catch(() => setPing({ text: '', cls: '' }));
   }, [profileId]);
+
+  // cycle animations while loading
+  useEffect(() => {
+    if (ping !== null) return;
+    const t = setInterval(() => setAnimIdx(i => (i + 1) % PING_ANIMATIONS.length), 600);
+    return () => clearInterval(t);
+  }, [ping]);
+
+  if (ping === null) {
+    const Anim = PING_ANIMATIONS[animIdx];
+    return <div className="ping-badge pinging"><Anim /></div>;
+  }
 
   return <div className={`ping-badge ${ping.cls}`}>{ping.text}</div>;
 }

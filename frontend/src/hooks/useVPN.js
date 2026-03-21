@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ConnectProfile, Disconnect, LoadProfiles, ImportProfile,
   UpdateProfile, DeleteProfile, PickOvpnFile, GetTrafficStats,
-  LoadAuditLog, ClearAuditLog, CheckProfileCerts,
+  LoadAuditLog, ClearAuditLog, DeleteAuditEntry, CheckProfileCerts,
   CheckForUpdate, CheckChangelog, GetCurrentVersion,
   PingServer, RunSpeedTest, GetSettings, SaveSettings, GetLocalIP, GetPublicIP
 } from '../../wailsjs/go/main/App';
@@ -125,7 +125,7 @@ export function useVPN() {
     refreshProfiles,
     // Pass-through API calls
     ImportProfile, UpdateProfile, DeleteProfile, PickOvpnFile,
-    LoadAuditLog, ClearAuditLog, CheckForUpdate, CheckChangelog,
+    LoadAuditLog, ClearAuditLog, DeleteAuditEntry, CheckForUpdate, CheckChangelog,
     GetCurrentVersion, PingServer, RunSpeedTest, GetSettings, SaveSettings,
     BrowserOpenURL,
   };

@@ -12,6 +12,8 @@ export function ClearAuditLog():Promise<void>;
 
 export function ConnectProfile(arg1:string):Promise<void>;
 
+export function DeleteAuditEntry(arg1:string):Promise<void>;
+
 export function DeleteProfile(arg1:string):Promise<void>;
 
 export function Disconnect():Promise<void>;

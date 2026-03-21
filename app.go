@@ -390,15 +390,22 @@ func (a *App) connect(ovpnPath, username, password string) error {
 		"--verb", "3",
 	)
 
-	stdout, err := a.vpnProcess.StdoutPipe()
+	// Use a single pipe for both stdout and stderr
+	pr, pw, err := os.Pipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create pipe: %w", err)
 	}
-	a.vpnProcess.Stderr = a.vpnProcess.Stdout
+	a.vpnProcess.Stdout = pw
+	a.vpnProcess.Stderr = pw
 
 	if err := a.vpnProcess.Start(); err != nil {
+		pw.Close()
+		pr.Close()
 		return fmt.Errorf("failed to start openvpn: %w", err)
 	}
+	// Close write end in this process — only openvpn writes to it
+	pw.Close()
+	stdout := pr
 
 	a.connected = true
 	a.vpnInfo = VPNInfo{}
@@ -414,12 +421,12 @@ func (a *App) connect(ovpnPath, username, password string) error {
 			line := scanner.Text()
 			runtime.EventsEmit(a.ctx, "vpn:log", line)
 			a.parseLine(line)
-			// Detect auth failure — no point retrying with wrong credentials
-			if strings.Contains(line, "AUTH_FAILED") || strings.Contains(line, "auth-failure") {
+			if !authFailed && (strings.Contains(line, "AUTH_FAILED") || strings.Contains(line, "auth-failure")) {
 				authFailed = true
 				runtime.EventsEmit(a.ctx, "vpn:log", "Authentication failed — check your credentials.")
 			}
 		}
+		stdout.Close()
 		a.mu.Lock()
 		connectedAt    := a.connectedAt
 		profileName    := a.activeProfileName
@@ -477,6 +484,11 @@ func (a *App) parseLine(line string) {
 	}
 	if strings.Contains(line, "Initialization Sequence Completed") {
 		a.connectedAt = time.Now()
+		// Cancel any running reconnect loop — we're connected
+		if a.reconnectCancel != nil {
+			close(a.reconnectCancel)
+			a.reconnectCancel = nil
+		}
 		go func() {
 			ip := a.GetPublicIP()
 			a.mu.Lock()
@@ -556,24 +568,11 @@ func (a *App) healthCheck() {
 			return
 		}
 
-		// Check 1: tun interface still exists
+		// Check: tun interface still exists and is UP
 		if iface != "" {
 			out, err := exec.Command("ip", "link", "show", iface).Output()
-			if err != nil || !strings.Contains(string(out), "UP") {
+			if err != nil || (!strings.Contains(string(out), " UP") && !strings.Contains(string(out), ",UP")) {
 				runtime.EventsEmit(a.ctx, "vpn:log", "Health check: tun interface gone — reconnecting...")
-				a.forceReconnect(profileID)
-				return
-			}
-		}
-
-		// Check 2: ping the VPN gateway
-		a.mu.Lock()
-		gateway := a.vpnInfo.Gateway
-		a.mu.Unlock()
-		if gateway != "" {
-			err := exec.Command("ping", "-c", "1", "-W", "3", "-I", iface, gateway).Run()
-			if err != nil {
-				runtime.EventsEmit(a.ctx, "vpn:log", "Health check: gateway unreachable — reconnecting...")
 				a.forceReconnect(profileID)
 				return
 			}
@@ -610,16 +609,16 @@ func (a *App) startReconnectLoop(profileID string) {
 	a.mu.Unlock()
 
 	go func() {
-		delays := []time.Duration{5, 10, 20, 40, 60}
-		for attempt, delay := range delays {
+		delays := []int{5, 10, 20, 40, 60} // seconds
+		for attempt, delaySec := range delays {
 			// Emit reconnecting status with countdown
-			msg := fmt.Sprintf("Reconnecting in %ds (attempt %d/%d)...", int(delay.Seconds()), attempt+1, len(delays))
+			msg := fmt.Sprintf("Reconnecting in %ds (attempt %d/%d)...", delaySec, attempt+1, len(delays))
 			runtime.EventsEmit(a.ctx, "vpn:log", msg)
 			runtime.EventsEmit(a.ctx, "vpn:status", "reconnecting")
 			runtime.EventsEmit(a.ctx, "vpn:reconnect", map[string]interface{}{
 				"attempt": attempt + 1,
 				"total":   len(delays),
-				"delay":   int(delay.Seconds()),
+				"delay":   delaySec,
 			})
 
 			// Wait with cancellation support
@@ -627,7 +626,7 @@ func (a *App) startReconnectLoop(profileID string) {
 			case <-cancel:
 				runtime.EventsEmit(a.ctx, "vpn:log", "Reconnect cancelled.")
 				return
-			case <-time.After(delay * time.Second):
+			case <-time.After(time.Duration(delaySec) * time.Second):
 			}
 
 			// Check if manually cancelled during wait
@@ -640,11 +639,38 @@ func (a *App) startReconnectLoop(profileID string) {
 
 			runtime.EventsEmit(a.ctx, "vpn:log", fmt.Sprintf("Reconnect attempt %d/%d...", attempt+1, len(delays)))
 			if err := a.ConnectProfile(profileID); err == nil {
-				// Success — loop will exit naturally when connected
-				a.mu.Lock()
-				a.reconnectCancel = nil
-				a.mu.Unlock()
-				return
+				// ConnectProfile launched the process — wait until we're actually
+				// connected (or it fails) before declaring success and exiting.
+				connected := make(chan struct{})
+				failed    := make(chan struct{})
+				unsub1 := runtime.EventsOn(a.ctx, "vpn:status", func(data ...interface{}) {
+					if len(data) > 0 {
+						switch data[0].(string) {
+						case "connected":
+							select { case connected <- struct{}{}: default: }
+						case "disconnected":
+							select { case failed <- struct{}{}: default: }
+						}
+					}
+				})
+				select {
+				case <-connected:
+					unsub1()
+					a.mu.Lock()
+					a.reconnectCancel = nil
+					a.mu.Unlock()
+					return
+				case <-failed:
+					unsub1()
+					// fall through to next attempt
+				case <-cancel:
+					unsub1()
+					runtime.EventsEmit(a.ctx, "vpn:log", "Reconnect cancelled.")
+					return
+				case <-time.After(60 * time.Second):
+					unsub1()
+					// timed out waiting — try next attempt
+				}
 			}
 		}
 		runtime.EventsEmit(a.ctx, "vpn:log", "Auto-reconnect failed after 5 attempts.")

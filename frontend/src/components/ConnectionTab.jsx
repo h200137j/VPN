@@ -18,14 +18,25 @@ const TILES = [
 ];
 
 const CONNECTING_MSGS = [
-  'Establishing secure tunnel...',
-  'Authenticating credentials...',
-  'Negotiating encryption...',
-  'Configuring routes...',
-  'Almost there...',
+  'Bribing the internet hamsters... 🐹',
+  'Putting on our invisibility cloak... 🧙',
+  'Convincing packets to wear disguises...',
+  'Encrypting your embarrassing searches... 🙈',
+  'Negotiating with the firewall trolls... 🧌',
+  'Almost invisible, hold still...',
 ];
 
-function ParticleCanvas() {
+const DISCONNECTING_MSGS = [
+  'Telling the hamsters to take a break... 🐹',
+  'Removing invisibility cloak... poof! 💨',
+  'Unencrypting your dignity...',
+  'Returning packets to their natural habitat...',
+  'Shredding the evidence... 🔥',
+  'You are now legally visible again 👀',
+];
+
+// ── Particle canvas (green = connected) ─────────────────────────────────────
+function ParticleCanvas({ color = '62,207,142' }) {
   const canvasRef = useRef(null);
   const rafRef    = useRef(null);
 
@@ -58,15 +69,13 @@ function ParticleCanvas() {
     nodes[0].vy = 0;
 
     let t = 0;
-
     const draw = () => {
       ctx.clearRect(0, 0, W, H);
       t += 0.016;
 
       nodes.forEach((n, i) => {
         if (i === 0) return;
-        n.x += n.vx;
-        n.y += n.vy;
+        n.x += n.vx; n.y += n.vy;
         if (n.x < 0 || n.x > W) n.vx *= -1;
         if (n.y < 0 || n.y > H) n.vy *= -1;
       });
@@ -81,7 +90,7 @@ function ParticleCanvas() {
             ctx.beginPath();
             ctx.moveTo(nodes[i].x, nodes[i].y);
             ctx.lineTo(nodes[j].x, nodes[j].y);
-            ctx.strokeStyle = `rgba(62,207,142,${alpha})`;
+            ctx.strokeStyle = `rgba(${color},${alpha})`;
             ctx.lineWidth = 0.8;
             ctx.stroke();
           }
@@ -92,15 +101,15 @@ function ParticleCanvas() {
         const pulse  = 0.6 + 0.4 * Math.sin(t * 1.8 + n.pulse);
         const radius = i === 0 ? n.r * (0.85 + 0.15 * Math.sin(t * 2)) : n.r;
         const grd = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, radius * 4);
-        grd.addColorStop(0, `rgba(62,207,142,${pulse * 0.45})`);
-        grd.addColorStop(1, 'rgba(62,207,142,0)');
+        grd.addColorStop(0, `rgba(${color},${pulse * 0.45})`);
+        grd.addColorStop(1, `rgba(${color},0)`);
         ctx.beginPath();
         ctx.arc(n.x, n.y, radius * 4, 0, Math.PI * 2);
         ctx.fillStyle = grd;
         ctx.fill();
         ctx.beginPath();
         ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(62,207,142,${pulse})`;
+        ctx.fillStyle = `rgba(${color},${pulse})`;
         ctx.fill();
       });
 
@@ -109,11 +118,12 @@ function ParticleCanvas() {
 
     draw();
     return () => cancelAnimationFrame(rafRef.current);
-  }, []);
+  }, [color]);
 
   return <canvas ref={canvasRef} className="conn-particle-canvas" />;
 }
 
+// ── Connected hero ───────────────────────────────────────────────────────────
 function ConnectedHero({ vpnInfo, connectedAt }) {
   const [, tick] = useReducer(x => x + 1, 0);
   useEffect(() => {
@@ -123,7 +133,7 @@ function ConnectedHero({ vpnInfo, connectedAt }) {
 
   return (
     <div className="info-hero conn-hero-live">
-      <ParticleCanvas />
+      <ParticleCanvas color="62,207,142" />
       <div className="conn-ripple r1" />
       <div className="conn-ripple r2" />
       <div className="conn-ripple r3" />
@@ -141,36 +151,46 @@ function ConnectedHero({ vpnInfo, connectedAt }) {
   );
 }
 
-function ConnectingScreen({ status }) {
+// ── Connecting / Disconnecting screen ────────────────────────────────────────
+function TransitionScreen({ mode }) {
+  const isDisconnecting = mode === 'disconnecting';
+  const msgs  = isDisconnecting ? DISCONNECTING_MSGS : CONNECTING_MSGS;
+  const label = mode === 'reconnecting' ? 'Reconnecting' : isDisconnecting ? 'Disconnecting' : 'Connecting';
   const [msgIdx, setMsgIdx] = useState(0);
-  const label = status === 'reconnecting' ? 'Reconnecting' : 'Connecting';
 
   useEffect(() => {
-    const t = setInterval(() => setMsgIdx(i => (i + 1) % CONNECTING_MSGS.length), 2200);
+    const t = setInterval(() => setMsgIdx(i => (i + 1) % msgs.length), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [msgs.length]);
 
   return (
-    <div className="conn-waiting">
+    <div className={`conn-waiting${isDisconnecting ? ' conn-waiting-disc' : ''}`}>
       <div className="conn-orbit-wrap">
-        <div className="conn-orbit o1" />
-        <div className="conn-orbit o2" />
-        <div className="conn-orbit o3" />
-        <div className="conn-dot-track t1"><div className="conn-dot-orb" /></div>
-        <div className="conn-dot-track t2"><div className="conn-dot-orb orb2" /></div>
-        <div className="conn-shield-center">
+        <div className={`conn-orbit o1${isDisconnecting ? ' disc' : ''}`} />
+        <div className={`conn-orbit o2${isDisconnecting ? ' disc' : ''}`} />
+        <div className={`conn-orbit o3${isDisconnecting ? ' disc' : ''}`} />
+        <div className="conn-dot-track t1">
+          <div className={`conn-dot-orb${isDisconnecting ? ' orb-disc' : ''}`} />
+        </div>
+        <div className="conn-dot-track t2">
+          <div className={`conn-dot-orb${isDisconnecting ? ' orb-disc2' : ' orb2'}`} />
+        </div>
+        <div className={`conn-shield-center${isDisconnecting ? ' disc' : ''}`}>
           <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
             <path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"/>
           </svg>
         </div>
       </div>
       <div className="conn-waiting-label">{label}</div>
-      <div className="conn-waiting-msg" key={msgIdx}>{CONNECTING_MSGS[msgIdx]}</div>
-      <div className="conn-scan-bar"><div className="conn-scan-fill" /></div>
+      <div className="conn-waiting-msg" key={msgIdx}>{msgs[msgIdx]}</div>
+      <div className="conn-scan-bar">
+        <div className={`conn-scan-fill${isDisconnecting ? ' disc' : ''}`} />
+      </div>
     </div>
   );
 }
 
+// ── Log box ──────────────────────────────────────────────────────────────────
 function LogBox({ logs, onClear }) {
   const boxRef = useRef(null);
   useEffect(() => {
@@ -193,16 +213,18 @@ function LogBox({ logs, onClear }) {
   );
 }
 
-export default function ConnectionTab({ vpn }) {
-  const isConnected    = vpn.status === 'connected';
+// ── Main tab ─────────────────────────────────────────────────────────────────
+export default function ConnectionTab({ vpn, disconnecting }) {
+  const isConnected    = vpn.status === 'connected' && !disconnecting;
   const isConnecting   = vpn.status === 'connecting' || vpn.status === 'reconnecting';
-  const isDisconnected = vpn.status === 'disconnected';
+  const isDisconnected = vpn.status === 'disconnected' && !disconnecting;
 
   return (
     <div className="tab-content">
-      {isConnecting  && <ConnectingScreen status={vpn.status} />}
-      {isConnected   && <ConnectedHero vpnInfo={vpn.vpnInfo} connectedAt={vpn.connectedAt} />}
-      {isDisconnected && (
+      {disconnecting                && <TransitionScreen mode="disconnecting" />}
+      {!disconnecting && isConnecting && <TransitionScreen mode={vpn.status} />}
+      {isConnected                  && <ConnectedHero vpnInfo={vpn.vpnInfo} connectedAt={vpn.connectedAt} />}
+      {isDisconnected               && (
         <div className="disconnected-hint">
           <div className="hint-icon">🛡</div>
           <div className="hint-text">Not connected</div>

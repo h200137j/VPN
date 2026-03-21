@@ -69,6 +69,26 @@ func (a *App) ClearAuditLog() error {
 	return os.Remove(auditLogPath())
 }
 
+// DeleteAuditEntry removes a single entry by ID
+func (a *App) DeleteAuditEntry(id string) error {
+	entries, err := a.LoadAuditLog()
+	if err != nil {
+		return err
+	}
+	filtered := entries[:0]
+	for _, e := range entries {
+		if e.ID != id {
+			filtered = append(filtered, e)
+		}
+	}
+	if len(filtered) == 0 {
+		return os.Remove(auditLogPath())
+	}
+	data, _ := json.MarshalIndent(filtered, "", "  ")
+	os.MkdirAll(configDir(), 0700)
+	return os.WriteFile(auditLogPath(), data, 0600)
+}
+
 // GetCertInfo parses the certificate from an ovpn file and returns expiry info
 func (a *App) GetCertInfo(ovpnPath string) (*CertInfo, error) {
 	data, err := os.ReadFile(ovpnPath)
