@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useVPN } from './hooks/useVPN';
 import Header from './components/Header';
 import TabBar from './components/TabBar';
@@ -15,7 +15,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('profiles');
   const [version, setVersion] = useState('dev');
 
-  // Auto-switch to connection tab when connecting
   useEffect(() => {
     if (vpn.status === 'connecting' || vpn.status === 'connected' || vpn.status === 'reconnecting') {
       setActiveTab('connection');
@@ -35,10 +34,10 @@ export default function App() {
       <Header status={vpn.status} />
       <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {activeTab === 'profiles'    && <ProfilesTab vpn={vpn} />}
-      {activeTab === 'connection'  && <ConnectionTab vpn={vpn} />}
-      {activeTab === 'audit'       && <AuditTab vpn={vpn} />}
-      {activeTab === 'settings'    && <SettingsTab vpn={vpn} />}
+      {activeTab === 'profiles'   && <ProfilesTab vpn={vpn} />}
+      {activeTab === 'connection' && <ConnectionTab vpn={vpn} />}
+      {activeTab === 'audit'      && <AuditTab vpn={vpn} />}
+      {activeTab === 'settings'   && <SettingsTab vpn={vpn} />}
 
       {showActions && (
         <ActionRow

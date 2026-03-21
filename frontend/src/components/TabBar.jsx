@@ -1,10 +1,8 @@
-import React from 'react';
-
 const TABS = [
-  { id: 'profiles',   label: 'Profiles' },
-  { id: 'connection', label: 'Connection' },
-  { id: 'audit',      label: 'Audit' },
-  { id: 'settings',   label: 'Settings' },
+  { id: 'profiles',   label: 'Profiles',   icon: '⚡' },
+  { id: 'connection', label: 'Connection', icon: '🛡' },
+  { id: 'audit',      label: 'Audit',      icon: '📋' },
+  { id: 'settings',   label: 'Settings',   icon: '⚙️' },
 ];
 
 export default function TabBar({ activeTab, setActiveTab }) {
@@ -16,7 +14,8 @@ export default function TabBar({ activeTab, setActiveTab }) {
           className={`tab${activeTab === t.id ? ' active' : ''}`}
           onClick={() => setActiveTab(t.id)}
         >
-          {t.label}
+          <span className="tab-icon">{t.icon}</span>
+          <span className="tab-label">{t.label}</span>
         </button>
       ))}
     </div>
