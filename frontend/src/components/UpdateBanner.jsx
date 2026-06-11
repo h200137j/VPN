@@ -15,14 +15,14 @@ export default function UpdateBanner({ vpn }) {
   return (
     <div className="update-banner">
       <span className="update-banner-text">
-        🚀 <strong>{info.latestTag}</strong> is available
+        ▲ update: <strong>{info.latestTag}</strong> available
       </span>
       <a
         className="update-banner-link"
         href="#"
         onClick={e => { e.preventDefault(); vpn.BrowserOpenURL(info.releaseUrl); }}
       >
-        Download
+        download
       </a>
       <button className="update-banner-dismiss" onClick={() => setDismissed(true)}>✕</button>
     </div>

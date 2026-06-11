@@ -22,21 +22,21 @@ export default function SettingsTab({ vpn }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      vpn.appendLog('Settings error: ' + e, 'error');
+      vpn.appendLog('settings error: ' + e, 'error');
     }
   };
 
   return (
     <div className="tab-content">
       <div className="section-header">
-        <span className="section-label">Settings</span>
+        <span className="section-label">// config</span>
       </div>
 
       <div className="settings-group">
         <div className="setting-row">
           <div className="setting-info">
-            <div className="setting-label">Auto-connect on launch</div>
-            <div className="setting-desc">Automatically connect when the app starts</div>
+            <div className="setting-label">auto_connect</div>
+            <div className="setting-desc">connect automatically when the app starts</div>
           </div>
           <label className="toggle">
             <input type="checkbox" checked={autoConnect} onChange={e => setAutoConnect(e.target.checked)} />
@@ -47,14 +47,14 @@ export default function SettingsTab({ vpn }) {
         {autoConnect && (
           <div className="setting-row">
             <div className="setting-info">
-              <div className="setting-label">Profile to connect</div>
+              <div className="setting-label">auto_connect_profile</div>
             </div>
             <select
               className="setting-select"
               value={profileId}
               onChange={e => setProfileId(e.target.value)}
             >
-              <option value="">— select profile —</option>
+              <option value="">— select —</option>
               {vpn.profiles.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -66,8 +66,8 @@ export default function SettingsTab({ vpn }) {
       <div className="settings-group">
         <div className="setting-row">
           <div className="setting-info">
-            <div className="setting-label">Launch on login</div>
-            <div className="setting-desc">Start GoVPN automatically when you log in</div>
+            <div className="setting-label">launch_on_login</div>
+            <div className="setting-desc">start govpn automatically when you log in</div>
           </div>
           <label className="toggle">
             <input type="checkbox" checked={launchOnLogin} onChange={e => setLaunchOnLogin(e.target.checked)} />
@@ -77,8 +77,8 @@ export default function SettingsTab({ vpn }) {
 
         <div className="setting-row">
           <div className="setting-info">
-            <div className="setting-label">Start minimized to tray</div>
-            <div className="setting-desc">Hide window on launch, show only in system tray</div>
+            <div className="setting-label">start_minimized</div>
+            <div className="setting-desc">hide window on launch, live in the tray</div>
           </div>
           <label className="toggle">
             <input type="checkbox" checked={startMinimized} onChange={e => setStartMinimized(e.target.checked)} />
@@ -88,8 +88,8 @@ export default function SettingsTab({ vpn }) {
       </div>
 
       <div className="add-actions">
-        <button className="btn-save-profile" onClick={save}>
-          {saved ? '✓ Saved' : 'Save Settings'}
+        <button className="btn-primary" onClick={save}>
+          {saved ? '✓ written' : ':wq save'}
         </button>
       </div>
     </div>

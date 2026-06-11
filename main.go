@@ -9,7 +9,7 @@ import (
 )
 
 // version is injected at build time via -ldflags "-X main.version=v1.x.x"
-var version = "dev"
+var version = "v1.0.7"
 
 //go:embed all:frontend/dist
 var assets embed.FS

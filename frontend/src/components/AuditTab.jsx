@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 function AuditEntry({ entry, onDelete }) {
   const [removing, setRemoving] = useState(false);
@@ -16,18 +16,18 @@ function AuditEntry({ entry, onDelete }) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div className="audit-icon">🔐</div>
+      <span className="audit-marker" />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="audit-row">
           <span className="audit-profile">{entry.profileName}</span>
           <span className="audit-meta">{entry.duration}</span>
         </div>
         <div className="audit-meta">{entry.connectedAt}</div>
         {(entry.vpnIp || entry.serverIp) && (
           <div className="audit-ips">
-            {entry.vpnIp && <span>VPN: {entry.vpnIp}</span>}
-            {entry.vpnIp && entry.serverIp && <span> · </span>}
-            {entry.serverIp && <span>Server: {entry.serverIp}</span>}
+            {entry.vpnIp && <span>vpn={entry.vpnIp}</span>}
+            {entry.vpnIp && entry.serverIp && <span> </span>}
+            {entry.serverIp && <span>server={entry.serverIp}</span>}
           </div>
         )}
       </div>
@@ -76,17 +76,17 @@ export default function AuditTab({ vpn }) {
   return (
     <div className="tab-content">
       <div className="section-header">
-        <span className="section-label">Audit Log</span>
-        <button className="btn-clear" onClick={clear} disabled={entries.length === 0 || clearing}>
-          Clear all
+        <span className="section-label">// audit</span>
+        <button className="btn-ghost" onClick={clear} disabled={entries.length === 0 || clearing}>
+          clear all
         </button>
       </div>
 
       {entries.length === 0 ? (
-        <div className="no-profiles">No audit entries yet.</div>
+        <div className="empty-state">no sessions recorded yet</div>
       ) : (
         <div className={`audit-list${clearing ? ' audit-list-clearing' : ''}`}>
-          {[...entries].reverse().map((e, i) => (
+          {[...entries].reverse().map(e => (
             <AuditEntry
               key={e.id}
               entry={e}

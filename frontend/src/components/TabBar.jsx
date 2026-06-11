@@ -1,23 +1,23 @@
 const TABS = [
-  { id: 'profiles',   label: 'Profiles',   icon: '⚡' },
-  { id: 'connection', label: 'Connection', icon: '🛡' },
-  { id: 'audit',      label: 'Audit',      icon: '📋' },
-  { id: 'settings',   label: 'Settings',   icon: '⚙️' },
+  { id: 'profiles',   label: 'profiles', key: '1' },
+  { id: 'connection', label: 'session',  key: '2' },
+  { id: 'audit',      label: 'audit',    key: '3' },
+  { id: 'settings',   label: 'config',   key: '4' },
 ];
 
 export default function TabBar({ activeTab, setActiveTab }) {
   return (
-    <div className="tabs">
+    <nav className="tabs">
       {TABS.map(t => (
         <button
           key={t.id}
           className={`tab${activeTab === t.id ? ' active' : ''}`}
           onClick={() => setActiveTab(t.id)}
         >
-          <span className="tab-icon">{t.icon}</span>
+          <span className="tab-key">{t.key}</span>
           <span className="tab-label">{t.label}</span>
         </button>
       ))}
-    </div>
+    </nav>
   );
 }
