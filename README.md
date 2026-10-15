@@ -2,13 +2,14 @@
 
 # 🛡️ GoVPN
 
-### A lightweight OpenVPN client for Linux — built with Go & Wails
+### A lightweight OpenVPN client for Linux & macOS — built with Go & Wails
 
 [![Latest Release](https://img.shields.io/github/v/release/h200137j/VPN?style=flat-square&color=5b8dee&label=latest)](https://github.com/h200137j/VPN/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/h200137j/VPN/total?style=flat-square&color=3ecf8e)](https://github.com/h200137j/VPN/releases)
 ![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go&logoColor=white)
 ![Wails](https://img.shields.io/badge/Wails-v2-red?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Linux-FCC624?style=flat-square&logo=linux&logoColor=black)
+![Platform](https://img.shields.io/badge/Platform-macOS-000000?style=flat-square&logo=apple&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 </div>
@@ -33,6 +34,18 @@ sudo apt-get install -f
 chmod +x govpn
 ./govpn
 ```
+
+### macOS
+
+```bash
+brew install openvpn
+```
+
+Download `govpn_macos_universal.zip` from the [Releases page](https://github.com/h200137j/VPN/releases/latest), unzip it and move `GoVPN.app` to `/Applications`. The app is not notarized, so on first launch right-click it and choose **Open** (or run `xattr -dr com.apple.quarantine /Applications/GoVPN.app`).
+
+Then follow the **Sudoers Setup** section below.
+
+> On macOS there is no tray icon: closing the window quits GoVPN and disconnects. Connection status is shown in the window title.
 
 ---
 
@@ -68,6 +81,13 @@ git clone https://github.com/h200137j/VPN.git
 cd VPN
 wails build -tags webkit2_41
 ./build/bin/vpn
+```
+
+On macOS you only need Go, Wails, Node.js, the Xcode Command Line Tools (`xcode-select --install`) and `brew install openvpn`:
+
+```bash
+wails build -platform darwin/universal
+open build/bin/govpn.app
 ```
 
 ### Dev mode (hot reload)
@@ -122,6 +142,12 @@ GoVPN uses `sudo` to run `openvpn` and clean up stale routes. To avoid password 
 
 ```
 youruser ALL=(ALL) NOPASSWD: /usr/sbin/openvpn, /usr/sbin/ip, /bin/bash
+```
+
+On macOS only `openvpn` is needed (use `/usr/local/sbin/openvpn` on Intel Macs):
+
+```
+youruser ALL=(ALL) NOPASSWD: /opt/homebrew/sbin/openvpn
 ```
 
 ---

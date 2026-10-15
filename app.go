@@ -75,7 +75,7 @@ func (a *App) startup(ctx context.Context) {
 
 	// Start minimized to tray if configured
 	if cfg.StartMinimized {
-		runtime.WindowHide(a.ctx)
+		hideOnStartup(a.ctx)
 	}
 
 	// Auto-connect if configured
@@ -85,6 +85,33 @@ func (a *App) startup(ctx context.Context) {
 			runtime.EventsEmit(a.ctx, "vpn:log", "Auto-connecting...")
 			a.ConnectProfile(cfg.AutoConnectProfileID)
 		}()
+	}
+}
+
+// shutdown stops openvpn so it isn't left running orphaned after the app quits
+func (a *App) shutdown(ctx context.Context) {
+	a.mu.Lock()
+	a.manualDisconnect = true
+	if a.reconnectCancel != nil {
+		close(a.reconnectCancel)
+		a.reconnectCancel = nil
+	}
+	proc := a.vpnProcess
+	a.mu.Unlock()
+
+	if proc == nil {
+		return
+	}
+	proc.Process.Signal(os.Interrupt)
+	done := make(chan struct{})
+	go func() {
+		proc.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		proc.Process.Kill()
 	}
 }
 
@@ -243,13 +270,8 @@ func (a *App) GetPublicIP() string {
 
 // GetLocalIP returns the primary non-loopback local IP address
 func (a *App) GetLocalIP() string {
-	// Use 'ip route get' — fastest way to find the outbound interface IP
-	out, err := exec.Command("ip", "route", "get", "8.8.8.8").Output()
-	if err == nil {
-		// Output: "8.8.8.8 via 192.168.1.1 dev wlp0s20f3 src 192.168.1.100 ..."
-		if m := regexp.MustCompile(`src\s+([\d.]+)`).FindStringSubmatch(string(out)); m != nil {
-			return m[1]
-		}
+	if ip := outboundIP(); ip != "" {
+		return ip
 	}
 	// Fallback: walk interfaces
 	ifaces, err := net.Interfaces()
@@ -260,7 +282,7 @@ func (a *App) GetLocalIP() string {
 		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
 			continue
 		}
-		if strings.HasPrefix(iface.Name, "tun") || strings.HasPrefix(iface.Name, "tap") {
+		if strings.HasPrefix(iface.Name, "tun") || strings.HasPrefix(iface.Name, "tap") || strings.HasPrefix(iface.Name, "utun") {
 			continue
 		}
 		addrs, _ := iface.Addrs()
@@ -280,7 +302,7 @@ func (a *App) GetLocalIP() string {
 	return "unavailable"
 }
 
-// GetTrafficStats reads bytes from /proc/net/dev for the tun interface
+// GetTrafficStats reads rx/tx byte counters for the tun interface
 func (a *App) GetTrafficStats() TrafficStats {
 	a.mu.Lock()
 	iface := a.vpnInfo.Interface
@@ -291,26 +313,11 @@ func (a *App) GetTrafficStats() TrafficStats {
 	if iface == "" {
 		return stats
 	}
-	data, err := os.ReadFile("/proc/net/dev")
-	if err != nil {
-		return stats
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, iface+":") {
-			continue
-		}
-		line = strings.TrimPrefix(line, iface+":")
-		fields := strings.Fields(line)
-		if len(fields) >= 9 {
-			rx, _ := strconv.ParseUint(fields[0], 10, 64)
-			tx, _ := strconv.ParseUint(fields[8], 10, 64)
-			stats.RxBytes = rx
-			stats.TxBytes = tx
-			stats.RxHuman = humanBytes(rx)
-			stats.TxHuman = humanBytes(tx)
-		}
-		break
+	if rx, tx, ok := interfaceBytes(iface); ok {
+		stats.RxBytes = rx
+		stats.TxBytes = tx
+		stats.RxHuman = humanBytes(rx)
+		stats.TxHuman = humanBytes(tx)
 	}
 	return stats
 }
@@ -319,32 +326,6 @@ func (a *App) GetVPNInfo() VPNInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.vpnInfo
-}
-
-// cleanupStaleRoutes flushes leftover tun interfaces in a single sudo call
-func cleanupStaleRoutes(logFn func(string)) {
-	out, err := exec.Command("ip", "link", "show").Output()
-	if err != nil {
-		return
-	}
-	tunRe := regexp.MustCompile(`\d+:\s+(tun\d+):`)
-	matches := tunRe.FindAllStringSubmatch(string(out), -1)
-	if len(matches) == 0 {
-		return
-	}
-	var cmds []string
-	for _, match := range matches {
-		iface := match[1]
-		logFn("Removing stale interface: " + iface)
-		cmds = append(cmds,
-			fmt.Sprintf("ip route flush dev %s 2>/dev/null || true", iface),
-			fmt.Sprintf("ip link set %s down 2>/dev/null || true", iface),
-			fmt.Sprintf("ip link delete %s 2>/dev/null || true", iface),
-		)
-	}
-	if err := exec.Command("sudo", "bash", "-c", strings.Join(cmds, "; ")).Run(); err != nil {
-		logFn("Cleanup warning: " + err.Error())
-	}
 }
 
 // ConnectProfile connects using a saved profile by ID
@@ -384,7 +365,7 @@ func (a *App) connect(ovpnPath, username, password string) error {
 		return fmt.Errorf("failed to write auth file: %w", err)
 	}
 
-	a.vpnProcess = exec.Command("sudo", "openvpn",
+	a.vpnProcess = exec.Command("sudo", openvpnBinary(),
 		"--config", ovpnPath,
 		"--auth-user-pass", authPath,
 		"--verb", "3",
@@ -482,6 +463,10 @@ func (a *App) parseLine(line string) {
 	if m := regexp.MustCompile(`TUN/TAP device\s+(\S+)\s+opened`).FindStringSubmatch(line); m != nil {
 		a.vpnInfo.Interface = m[1]
 	}
+	// macOS: "Opened utun device utun4"
+	if m := regexp.MustCompile(`Opened utun device\s+(\S+)`).FindStringSubmatch(line); m != nil {
+		a.vpnInfo.Interface = m[1]
+	}
 	if strings.Contains(line, "Initialization Sequence Completed") {
 		a.connectedAt = time.Now()
 		// Cancel any running reconnect loop — we're connected
@@ -570,8 +555,7 @@ func (a *App) healthCheck() {
 
 		// Check: tun interface still exists and is UP
 		if iface != "" {
-			out, err := exec.Command("ip", "link", "show", iface).Output()
-			if err != nil || (!strings.Contains(string(out), " UP") && !strings.Contains(string(out), ",UP")) {
+			if !interfaceUp(iface) {
 				runtime.EventsEmit(a.ctx, "vpn:log", "Health check: tun interface gone — reconnecting...")
 				a.forceReconnect(profileID)
 				return
@@ -752,8 +736,7 @@ func (a *App) PingServer(profileID string) PingResult {
 		return PingResult{Error: "could not parse server: " + err.Error()}
 	}
 
-	// Run ping -c 4 -W 3
-	out, err := exec.Command("ping", "-c", "4", "-W", "3", host).Output()
+	out, err := exec.Command("ping", pingArgs(host)...).Output()
 	if err != nil {
 		return PingResult{Host: host, Reachable: false, Error: "unreachable"}
 	}
@@ -765,8 +748,9 @@ func (a *App) PingServer(profileID string) PingResult {
 	if m := regexp.MustCompile(`(\d+(?:\.\d+)?)% packet loss`).FindStringSubmatch(outStr); m != nil {
 		result.PacketLoss, _ = strconv.ParseFloat(m[1], 64)
 	}
-	// Parse rtt: "rtt min/avg/max/mdev = 10.1/12.3/15.0/1.2 ms"
-	if m := regexp.MustCompile(`rtt min/avg/max/mdev = ([\d.]+)/([\d.]+)/([\d.]+)`).FindStringSubmatch(outStr); m != nil {
+	// Parse rtt: "rtt min/avg/max/mdev = 10.1/12.3/15.0/1.2 ms" (Linux)
+	// or "round-trip min/avg/max/stddev = 10.1/12.3/15.0/1.2 ms" (macOS)
+	if m := regexp.MustCompile(`(?:rtt|round-trip) min/avg/max/(?:mdev|stddev) = ([\d.]+)/([\d.]+)/([\d.]+)`).FindStringSubmatch(outStr); m != nil {
 		result.MinMs, _ = strconv.ParseFloat(m[1], 64)
 		result.AvgMs, _ = strconv.ParseFloat(m[2], 64)
 		result.MaxMs, _ = strconv.ParseFloat(m[3], 64)
@@ -849,46 +833,6 @@ func (a *App) SaveSettings(autoConnect bool, autoConnectProfileID string, launch
 	cfg.LaunchOnLogin = launchOnLogin
 	saveAppConfig(cfg)
 	return nil
-}
-
-// setAutostart writes or removes the ~/.config/autostart/govpn.desktop file
-func setAutostart(enable bool, startMinimized bool) error {
-	home, _ := os.UserHomeDir()
-	autostartDir  := filepath.Join(home, ".config", "autostart")
-	desktopFile   := filepath.Join(autostartDir, "govpn.desktop")
-
-	if !enable {
-		os.Remove(desktopFile)
-		return nil
-	}
-
-	// Find our own executable path
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("could not determine executable path: %w", err)
-	}
-
-	if err := os.MkdirAll(autostartDir, 0755); err != nil {
-		return err
-	}
-
-	hidden := "false"
-	if startMinimized {
-		hidden = "true"
-	}
-
-	content := fmt.Sprintf(`[Desktop Entry]
-Type=Application
-Name=GoVPN
-Comment=Lightweight OpenVPN client
-Exec=%s
-Icon=govpn
-Terminal=false
-Hidden=%s
-X-GNOME-Autostart-enabled=true
-`, exe, hidden)
-
-	return os.WriteFile(desktopFile, []byte(content), 0644)
 }
 
 // GetCurrentVersion returns the build-time version string

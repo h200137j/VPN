@@ -28,8 +28,10 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 15, G: 17, B: 23, A: 1},
 		OnStartup:        app.startup,
-		// Hide to tray instead of quitting on window close
-		HideWindowOnClose: true,
+		OnShutdown:       app.shutdown,
+		Menu:             appMenu(),
+		// Hide to tray instead of quitting on window close (not on macOS, see platform_darwin.go)
+		HideWindowOnClose: hideWindowOnClose,
 		Bind: []interface{}{
 			app,
 		},
